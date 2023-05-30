@@ -504,6 +504,7 @@ subroutine dropmixnuc( &
       end do
    end do
 
+   !-------------------------------
    factnum = 0._r8
    wtke    = 0._r8
 
@@ -514,6 +515,10 @@ subroutine dropmixnuc( &
       ! no aerosol tendencies
       call physics_ptend_init(ptend, state%psetcols, 'ndrop')
    end if
+
+  !!initialize variables to zero
+  !ndropmix(:,:) = 0._r8
+  !nsource(:,:) = 0._r8
 
    ! overall_main_i_loop
    do i = 1, ncol
@@ -565,22 +570,34 @@ subroutine dropmixnuc( &
 
       end do
 
-      nsav = 1
+      !-------------------------------------------------------------------------
+      ! Load aerosol mass and number mixing ratios
+      !-------------------------------------------------------------------------
       nnew = 2
+
+      nsav = 1
       do m = 1, ntot_amode
+
+         ! Number mixing ratios
          mm = mam_idx(m,0)
+
          raercol_cw(:,mm,nsav) = 0.0_r8
          raercol(:,mm,nsav)    = 0.0_r8
-         raercol_cw(top_lev:pver,mm,nsav) = qqcw(mm)%fld(i,top_lev:pver)
-         raercol(top_lev:pver,mm,nsav)    = raer(mm)%fld(i,top_lev:pver)
+
+         raercol_cw(top_lev:pver,mm,nsav) = qqcw(mm)%fld(i,top_lev:pver)  !cloud-borne
+         raercol(top_lev:pver,mm,nsav)    = raer(mm)%fld(i,top_lev:pver)  !interstitial
+
+         ! Mass mixing ratios
          do l = 1, nspec_amode(m)
             mm = mam_idx(m,l)
-            raercol_cw(top_lev:pver,mm,nsav) = qqcw(mm)%fld(i,top_lev:pver)
-            raercol(top_lev:pver,mm,nsav)    = raer(mm)%fld(i,top_lev:pver)
+            raercol_cw(top_lev:pver,mm,nsav) = qqcw(mm)%fld(i,top_lev:pver)  !cloud-borne
+            raercol(top_lev:pver,mm,nsav)    = raer(mm)%fld(i,top_lev:pver)  !interstitial
          end do
       end do
 
+      !-------------------------------------------------------------------------
       ! droplet nucleation/aerosol activation
+      !-------------------------------------------------------------------------
 
       ! tau_cld_regenerate = time scale for regeneration of cloudy air 
       !    by (horizontal) exchange with clear air
@@ -963,6 +980,8 @@ subroutine dropmixnuc( &
                  + raercol_cw(pver,mm,nsav)*(nact(pver,m) - taumix_internal_pver_inv)
             srcn(pver) = srcn(pver) + max(0.0_r8,tmpa)
          end do
+
+         ! cloud droplet number
          call explmix(  &
             qcld, srcn, ekkp, ekkm, overlapp,  &
             overlapm, qncld, zero, zero, pver, &
@@ -985,14 +1004,14 @@ subroutine dropmixnuc( &
             tmpa = raercol(pver,mm,nsav)*nact(pver,m) &
                  + raercol_cw(pver,mm,nsav)*(nact(pver,m) - taumix_internal_pver_inv)
             source(pver) = max(0.0_r8, tmpa)
-            flxconv = 0._r8
 
-            call explmix( &
+            call explmix( &! cloud-borne aerosol number
                raercol_cw(:,mm,nnew), source, ekkp, ekkm, overlapp, &
                overlapm, raercol_cw(:,mm,nsav), zero, zero, pver,   &
                dtmix, .false.)
 
-            call explmix( &
+            flxconv = 0._r8
+            call explmix( &! interstitial aerosol number
                raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &
                dtmix, .true., raercol_cw(:,mm,nsav))
@@ -1007,14 +1026,14 @@ subroutine dropmixnuc( &
                tmpa = raercol(pver,mm,nsav)*mact(pver,m) &
                     + raercol_cw(pver,mm,nsav)*(mact(pver,m) - taumix_internal_pver_inv)
                source(pver) = max(0.0_r8, tmpa)
-               flxconv = 0._r8
 
-               call explmix( &
+               call explmix( &! cloud-borne aerosol mass
                   raercol_cw(:,mm,nnew), source, ekkp, ekkm, overlapp, &
                   overlapm, raercol_cw(:,mm,nsav), zero, zero, pver,   &
                   dtmix, .false.)
 
-               call explmix( &
+               flxconv = 0._r8
+               call explmix( &! interstitial aerosol mass
                   raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                   overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &
                   dtmix, .true., raercol_cw(:,mm,nsav))
@@ -1189,15 +1208,19 @@ subroutine explmix( q, src, ekkp, ekkm, overlapp, overlapm, &
 
    integer k,kp1,km1
 
-   if ( is_unact ) then
+   !------------------------------------------------------
+   if ( is_unact ) then ! interstitial aerosols
+   !------------------------------------------------------
       !     the qactold*(1-overlap) terms are resuspension of activated material
       do k=top_lev,pver
+
          kp1=min(k+1,pver)
          km1=max(k-1,top_lev)
-         q(k) = qold(k) + dt*( - src(k) + ekkp(k)*(qold(kp1) - qold(k) +       &
-            qactold(kp1)*(1.0_r8-overlapp(k)))               &
-            + ekkm(k)*(qold(km1) - qold(k) +     &
-            qactold(km1)*(1.0_r8-overlapm(k))) )
+
+         q(k) = qold(k) + dt*( - src(k) &
+                               + ekkp(k)*(qold(kp1) - qold(k) + qactold(kp1)*(1.0_r8-overlapp(k))) &
+                               + ekkm(k)*(qold(km1) - qold(k) + qactold(km1)*(1.0_r8-overlapm(k))) )
+
          !        force to non-negative
          !        if(q(k)<-1.e-30)then
          !           write(iulog,*)'q=',q(k),' in explmix'
@@ -1205,33 +1228,43 @@ subroutine explmix( q, src, ekkp, ekkm, overlapp, overlapm, &
          !        endif
       end do
 
-      !     diffusion loss at base of lowest layer
-      q(pver)=q(pver)-surfrate*qold(pver)*dt+flxconv*dt
-      !        force to non-negative
-      !        if(q(pver)<-1.e-30)then
-      !           write(iulog,*)'q=',q(pver),' in explmix'
-      q(pver)=max(q(pver),0._r8)
-      !        endif
-   else
+
+   !------------------------------------------------------
+   else ! For cloud drop number and cloud-borne aerosols
+   !------------------------------------------------------
+
       do k=top_lev,pver
+
          kp1=min(k+1,pver)
          km1=max(k-1,top_lev)
-         q(k) = qold(k) + dt*(src(k) + ekkp(k)*(overlapp(k)*qold(kp1)-qold(k)) +      &
-            ekkm(k)*(overlapm(k)*qold(km1)-qold(k)) )
+
+         q(k) = qold(k) + dt*(   src(k) &
+                               + ekkp(k)*(overlapp(k)*qold(kp1)-qold(k)) &
+                               + ekkm(k)*(overlapm(k)*qold(km1)-qold(k)) )
+
          !        force to non-negative
          !        if(q(k)<-1.e-30)then
          !           write(iulog,*)'q=',q(k),' in explmix'
          q(k)=max(q(k),0._r8)
          !        endif
-      end do
-      !     diffusion loss at base of lowest layer
-      q(pver)=q(pver)-surfrate*qold(pver)*dt+flxconv*dt
-      !        force to non-negative
-      !        if(q(pver)<-1.e-30)then
-      !           write(iulog,*)'q=',q(pver),' in explmix'
-      q(pver)=max(q(pver),0._r8)
 
+      end do
    end if
+
+   !------------------------------------------------------
+   ! Apply various sources and sinks in the lowest layer
+   !------------------------------------------------------
+   q(pver) = q(pver) - surfrate*qold(pver)*dt + flxconv*dt
+
+   !-------------------------
+   ! Force to non-negative
+   !-------------------------
+   ! if (q(pver)<-1.e-30)then
+   !    write(iulog,*)'q=',q(pver),' in explmix'
+
+   q(pver) = max(q(pver),0._r8)
+
+   ! endif
 
 end subroutine explmix
 
