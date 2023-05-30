@@ -388,7 +388,7 @@ end subroutine microp_aero_readnl
 !=========================================================================================
 
 subroutine microp_aero_run ( &
-   state, ptend, deltatin, pbuf, liqcldfo )
+   state, ptend, deltatin, pbuf, liqcldfo, aero_cflx_tend)
 
    ! input arguments
    type(physics_state), target, intent(in)    :: state
@@ -396,6 +396,10 @@ subroutine microp_aero_run ( &
    real(r8),                    intent(in)    :: deltatin     ! time step (s)
    real(r8),                    intent(in)    :: liqcldfo(pcols,pver)  ! old liquid cloud fraction
    type(physics_buffer_desc),   pointer       :: pbuf(:)
+
+   real(r8), intent(in) :: aero_cflx_tend(:,:)  ! aerosol mixing ratio tendencies corresponding to cam_in%cflx
+                                                ! dimension sizes expected to be (pcols,pcnst).
+                                                ! These are all zeros unless cflx_cpl_opt = 4.
 
    ! local workspace
    ! all units mks unless otherwise stated
@@ -733,7 +737,7 @@ subroutine microp_aero_run ( &
 
       call t_startf('dropmixnuc')
       call dropmixnuc( &
-         state, ptend, deltatin, pbuf, wsub, &
+         state, ptend, deltatin, pbuf, wsub, aero_cflx_tend, &
          lcldn, lcldo, nctend_mixnuc, factnum)
       call t_stopf('dropmixnuc')
 

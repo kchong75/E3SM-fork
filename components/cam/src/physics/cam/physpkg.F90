@@ -2130,6 +2130,7 @@ subroutine tphysbc (ztodt,                          &
     ! Added for revised radiation coupling
 
     integer :: cflx_cpl_opt
+    real(r8) :: aero_cflx_tend(pcols,pcnst)
 
     call phys_getopts( microp_scheme_out      = microp_scheme, &
                        macrop_scheme_out      = macrop_scheme, &
@@ -2586,13 +2587,27 @@ end if
 
           end if
 
-          !--------------------------
-          ! cflx option 3: dribbling
+          !-------------------------------------------------
+          ! cflx option 3 or 4: dribbling or forcing method
+
+          aero_cflx_tend(:,:) = 0._r8
 
           if (cflx_cpl_opt.eq.3) then
+          ! Calculate ptend%q from cam_in%cflx for constituents 2:pcnst.
+          ! Apply ptend%q to constituents 2:pcnst.
+
              call cflx_tend(state, cam_in, ptend)
              call physics_update(state, ptend, cld_macmic_ztodt)
+
+          else if (cflx_cpl_opt.eq.4) then
+          ! Calculate ptend%q from cam_in%cflx for constituents 2:pcnst.
+          ! Save aerosol tendencies in aero_cflx_tend;
+          ! Apply tendencies of other constitutents.
+
+             call cflx_tend(state, cam_in, ptend, aero_cflx_tend)
+             call physics_update(state, ptend, cld_macmic_ztodt)
           end if
+
           call cnd_diag_checkpoint( diag, 'CFLX3_'//char_macmic_it, state, pbuf, cam_in, cam_out )
           !--------------
 
@@ -2602,7 +2617,7 @@ end if
             ! Aerosol Activation
             !===================================================
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo)
+            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend)
             call t_stopf('microp_aero_run')
 
             call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
@@ -2713,7 +2728,7 @@ end if
           if (.not. micro_do_icesupersat) then 
 
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo)
+            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend)
             call t_stopf('microp_aero_run')
 
           endif

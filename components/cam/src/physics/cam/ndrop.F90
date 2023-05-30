@@ -297,7 +297,7 @@ end subroutine ndrop_init
 !===============================================================================
 
 subroutine dropmixnuc( &
-   state, ptend, dtmicro, pbuf, wsub, &
+   state, ptend, dtmicro, pbuf, wsub, aero_cflx_tend_host, &
    cldn, cldo, tendnd, factnum)
 
    ! vertical diffusion and nucleation of cloud droplets
@@ -317,6 +317,10 @@ subroutine dropmixnuc( &
    real(r8), intent(in) :: wsub(pcols,pver)    ! subgrid vertical velocity
    real(r8), intent(in) :: cldn(pcols,pver)    ! cloud fraction
    real(r8), intent(in) :: cldo(pcols,pver)    ! cloud fraction on previous time step
+
+   real(r8), intent(in) :: aero_cflx_tend_host(:,:)  ! aerosol mixing ratio tendencies corresponding to cam_in%cflx
+                                                     ! dimension sizes expected to be (pcols,pcnst).
+                                                     ! These are all zeros unless cflx_cpl_opt = 4.
 
    ! output arguments
    real(r8), intent(out) :: tendnd(pcols,pver) ! change in droplet number concentration (#/kg/s)
@@ -403,6 +407,7 @@ subroutine dropmixnuc( &
    real(r8), allocatable :: raercol(:,:,:)    ! single column of aerosol mass, number mixing ratios
    real(r8), allocatable :: raercol_cw(:,:,:) ! same as raercol but for cloud-borne phase
 
+   real(r8), allocatable :: raer_tend_cflx(:) ! single cell of aerosol mixing ratio tendencies corresponding to cam_in%clfx
 
    real(r8) :: na(pcols), va(pcols), hy(pcols)
    real(r8), allocatable :: naermod(:)  ! (1/m3)
@@ -479,6 +484,7 @@ subroutine dropmixnuc( &
       mact(pver,ntot_amode),          &
       raer(ncnst_tot),                &
       qqcw(ncnst_tot),                &
+      raer_tend_cflx(ncnst_tot),      &
       raercol(pver,ncnst_tot,2),      &
       raercol_cw(pver,ncnst_tot,2),   &
       coltend(pcols,ncnst_tot),       &
