@@ -318,9 +318,10 @@ subroutine dropmixnuc( &
    real(r8), intent(in) :: cldn(pcols,pver)    ! cloud fraction
    real(r8), intent(in) :: cldo(pcols,pver)    ! cloud fraction on previous time step
 
-   real(r8), intent(in) :: aero_cflx_tend_host(:,:)  ! aerosol mixing ratio tendencies corresponding to cam_in%cflx
-                                                     ! dimension sizes expected to be (pcols,pcnst).
+   real(r8), intent(in) :: aero_cflx_tend_host(:,:)  ! Aerosol mixing ratio tendencies corresponding to cam_in%cflx.
+                                                     ! Dimension sizes are expected to be (pcols,pcnst).
                                                      ! These are all zeros unless cflx_cpl_opt = 4.
+                                                     ! POC Hui.Wan@pnnl.gov
 
    ! output arguments
    real(r8), intent(out) :: tendnd(pcols,pver) ! change in droplet number concentration (#/kg/s)
@@ -408,6 +409,8 @@ subroutine dropmixnuc( &
    real(r8), allocatable :: raercol_cw(:,:,:) ! same as raercol but for cloud-borne phase
 
    real(r8), allocatable :: raer_tend_cflx(:) ! single cell of aerosol mixing ratio tendencies corresponding to cam_in%clfx
+                                              ! It is an array because there are multiple species.
+   integer :: imode, ispec, icnst
 
    real(r8) :: na(pcols), va(pcols), hy(pcols)
    real(r8), allocatable :: naermod(:)  ! (1/m3)
@@ -599,6 +602,19 @@ subroutine dropmixnuc( &
             raercol_cw(top_lev:pver,mm,nsav) = qqcw(mm)%fld(i,top_lev:pver)  !cloud-borne
             raercol(top_lev:pver,mm,nsav)    = raer(mm)%fld(i,top_lev:pver)  !interstitial
          end do
+      end do
+
+      !-------------------------------------------------------------------------
+      ! Load aerosol mass and number emissions 
+      !-------------------------------------------------------------------------
+      do imode = 1, ntot_amode
+      do ispec = 0, nspec_amode(imode)
+
+          mm    = mam_idx(imode,ispec)       !mam's index
+          icnst = mam_cnst_idx(imode,ispec)  !host's index
+
+          raer_tend_cflx(mm) = aero_cflx_tend_host(i,icnst)
+      end do
       end do
 
       !-------------------------------------------------------------------------
@@ -1016,7 +1032,7 @@ subroutine dropmixnuc( &
                overlapm, raercol_cw(:,mm,nsav), zero, zero, pver,   &
                dtmix, .false.)
 
-            flxconv = 0._r8
+            flxconv = raer_tend_cflx(mm)
             call explmix( &! interstitial aerosol number
                raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &
@@ -1038,7 +1054,7 @@ subroutine dropmixnuc( &
                   overlapm, raercol_cw(:,mm,nsav), zero, zero, pver,   &
                   dtmix, .false.)
 
-               flxconv = 0._r8
+               flxconv = raer_tend_cflx(mm)
                call explmix( &! interstitial aerosol mass
                   raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                   overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &

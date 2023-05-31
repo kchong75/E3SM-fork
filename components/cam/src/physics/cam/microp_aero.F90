@@ -397,9 +397,10 @@ subroutine microp_aero_run ( &
    real(r8),                    intent(in)    :: liqcldfo(pcols,pver)  ! old liquid cloud fraction
    type(physics_buffer_desc),   pointer       :: pbuf(:)
 
-   real(r8), intent(in) :: aero_cflx_tend(:,:)  ! aerosol mixing ratio tendencies corresponding to cam_in%cflx
-                                                ! dimension sizes expected to be (pcols,pcnst).
+   real(r8), intent(in) :: aero_cflx_tend(:,:)  ! Aerosol mixing ratio tendencies corresponding to cam_in%cflx.
+                                                ! Dimension sizes are expected to be (pcols,pcnst).
                                                 ! These are all zeros unless cflx_cpl_opt = 4.
+                                                ! POC Hui.Wan@pnnl.gov
 
    ! local workspace
    ! all units mks unless otherwise stated
