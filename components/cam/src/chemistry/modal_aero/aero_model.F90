@@ -31,21 +31,27 @@ module aero_model
   public :: aero_model_register
   public :: aero_model_init
   public :: aero_model_gasaerexch ! create, grow, change, and shrink aerosols.
-  public :: aero_model_drydep     ! aerosol dry deposition and sediment
   public :: aero_model_wetdep     ! aerosol wet removal
   public :: aero_model_emissions  ! aerosol emissions
   public :: aero_model_surfarea   ! aerosol surface area for chemistry
 
+  public :: nmodes
+  public :: dgnumwet_idx
+  public :: wetdens_ap_idx
+  public :: drydep_lq
+
  ! Misc private data 
 
   ! number of modes
-  integer :: nmodes
+  integer,protected :: nmodes
+  integer,protected :: dgnumwet_idx        = 0
+  integer,protected :: wetdens_ap_idx      = 0
+  logical,protected :: drydep_lq(pcnst)
+
   integer :: pblh_idx            = 0
   integer :: dgnum_idx           = 0
-  integer :: dgnumwet_idx        = 0
   integer :: rate1_cw2pr_st_idx  = 0  
 
-  integer :: wetdens_ap_idx      = 0
   integer :: qaerwat_idx         = 0
 
   integer :: fracis_idx          = 0
@@ -96,7 +102,6 @@ module aero_model
   integer,allocatable :: drydep_indices(:)
   integer :: nwetdep = 0
   integer,allocatable :: wetdep_indices(:)
-  logical :: drydep_lq(pcnst)
   logical :: wetdep_lq(pcnst)
 
 

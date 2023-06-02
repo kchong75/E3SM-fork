@@ -1354,7 +1354,7 @@ subroutine tphysac (ztodt,   cam_in,               &
     use tracers,            only: tracers_timestep_tend
     use aoa_tracers,        only: aoa_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
-    use aero_model,         only: aero_model_drydep
+    use modal_aero_drydep,  only: aero_model_drydep
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
     use check_energy,       only: check_energy_chng, &
