@@ -14,7 +14,7 @@ module modal_aero_drydep
   use modal_aero_data,only: ntot_amode
   use aerodep_flx,    only: aerodep_flx_prescribed
   use physconst,      only: rair, rhoh2o
-  use camsrfexch,     only: cam_in_t, cam_out_t
+  use camsrfexch,     only: cam_out_t
   use physics_types,  only: physics_state, physics_ptend, physics_ptend_init
   use physics_buffer, only: physics_buffer_desc
   use physics_buffer, only: pbuf_get_field, pbuf_get_index, pbuf_set_field
@@ -32,7 +32,7 @@ contains
   ! Main subroutine of aerosol dry deposition parameterization.
   ! Also serves as the interface routine called by EAM's physics driver.
   !=============================================================================
-  subroutine aero_model_drydep  ( state, pbuf, obklen, ustar, cam_in, dt, cam_out, ptend )
+  subroutine aero_model_drydep  ( state, pbuf, ram1, fricvel, dt, cam_out, ptend )
 
     use aero_model,        only: drydep_lq, dgnumwet_idx, nmodes, wetdens_ap_idx
     use modal_aero_data,   only: qqcw_get_field
@@ -52,29 +52,21 @@ contains
     ! Arguments
 
     type(physics_state),target,intent(in) :: state     ! Physics state variables
-    real(r8),               intent(in)    :: obklen(:) ! Obukhov length [m]
-    real(r8),               intent(in)    :: ustar(:)  ! sfc friction velocity [m/s]
-    type(cam_in_t), target, intent(in)    :: cam_in    ! import state
+    type(physics_buffer_desc), pointer    :: pbuf(:)
+    real(r8),               intent(in)    :: ram1(pcols)    ! aerodynamical resistance, for turbulent dry deposition velocity [s/m]
+    real(r8),               intent(in)    :: fricvel(pcols) ! friction velocity, for  turbulent dry deposition velocity [m/s]
     real(r8),               intent(in)    :: dt        ! time step [s]
     type(cam_out_t),        intent(inout) :: cam_out   ! export state
     type(physics_ptend),    intent(out)   :: ptend     ! indivdual parameterization tendencies
-    type(physics_buffer_desc), pointer    :: pbuf(:)
+
 
     ! Local variables
-
-    real(r8), pointer :: landfrac(:) ! land fraction [unitless]
-    real(r8), pointer :: icefrac(:)  ! ice fraction [unitless]
-    real(r8), pointer :: ocnfrac(:)  ! ocean fraction [unitless]
-    real(r8), pointer :: fricvelin(:)! friction velocity from land model [m/s]
-    real(r8), pointer :: ram1in(:)   ! aerodynamical resistance from land model [s/m]
 
     real(r8), pointer :: tair(:,:)   ! air temperture [k]
     real(r8), pointer :: pmid(:,:)   ! air pressure at layer midpoint [Pa]
     real(r8), pointer :: pint(:,:)   ! air pressure at layer interface [Pa]
     real(r8), pointer :: pdel(:,:)   ! layer thickness [Pa]
 
-    real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
-    real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
 
     integer :: lchnk   ! chunk identifier
     integer :: ncol    ! number of active atmospheric columns
@@ -119,12 +111,6 @@ contains
     !---------------------------------------------------------------------------
     ! Retrieve input variables; initialize output (i.e., ptend).
     !---------------------------------------------------------------------------
-    landfrac  => cam_in%landfrac(:)
-    icefrac   => cam_in%icefrac(:)
-    ocnfrac   => cam_in%ocnfrac(:)
-    fricvelin => cam_in%fv(:)
-    ram1in    => cam_in%ram1(:)
-
     lchnk = state%lchnk
     ncol  = state%ncol
 
@@ -140,28 +126,6 @@ contains
 
     call physics_ptend_init(ptend, state%psetcols, 'aero_model_drydep_ma', lq=drydep_lq)
 
-    !--------------------------------------------------------------------------------
-    ! For turbulent dry deposition: calculate ram and fricvel over ocean and sea ice; 
-    ! copy values over land
-    !--------------------------------------------------------------------------------
-    call calcram( ncol,         &! in: state%ncol
-                  landfrac,     &! in: cam_in%landfrac
-                  icefrac,      &! in: cam_in%icefrac
-                  ocnfrac,      &! in: cam_in%ocnfrac
-                  obklen,       &! in: calculated in tphysac
-                  ustar,        &! in: calculated in tphysac
-                  tair(:,pver), &! in. note: bottom level only
-                  pmid(:,pver), &! in. note: bottom level only
-                  pdel(:,pver), &! in. note: bottom level only
-                  ram1in,       &! in: cam_in%ram1
-                  fricvelin,    &! in: cam_in%fv
-                  ram1,         &! out: aerodynamical resistance (s/m)
-                  fricvel       &! out: bulk friction velocity of a grid cell
-                  )
-
-    call outfld( 'airFV', fricvel(:), pcols, lchnk )
-    call outfld( 'RAM1',     ram1(:), pcols, lchnk )
- 
     !======================
     ! cloud-borne aerosols
     !---------------------------------------------------------------------------------------

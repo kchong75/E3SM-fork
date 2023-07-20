@@ -1354,6 +1354,7 @@ subroutine tphysac (ztodt,   cam_in,               &
     use tracers,            only: tracers_timestep_tend
     use aoa_tracers,        only: aoa_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
+    use modal_aero_drydep_utils, only: calcram
     use modal_aero_drydep,  only: aero_model_drydep
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
@@ -1380,6 +1381,7 @@ subroutine tphysac (ztodt,   cam_in,               &
     use phys_control,       only: use_qqflx_fixer
     use radiation,          only: get_saved_qrl_qrs
     use radheat,            only: radheat_tend_add_subtract
+    use cam_history,        only: outfld
 
     implicit none
 
@@ -1435,6 +1437,9 @@ subroutine tphysac (ztodt,   cam_in,               &
     real(r8) :: ftem      (pcols,pver) ! tmp space
     real(r8), pointer, dimension(:) :: static_ener_ac_2d ! Vertically integrated static energy
     real(r8), pointer, dimension(:) :: water_vap_ac_2d   ! Vertically integrated water vapor
+
+    real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+    real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
 
     ! physics buffer fields for total energy and mass adjustment
     integer itim_old, ifld
@@ -1670,10 +1675,31 @@ end if ! l_rayleigh
 
 if (l_tracer_aero) then
 
+    !===================================================
     !  aerosol dry deposition processes
+    !===================================================
     call t_startf('aero_drydep')
-    call aero_model_drydep( state, pbuf, obklen, surfric, cam_in, ztodt, cam_out, ptend )
+
+    !--------------------------------------------------------------------------------
+    ! For turbulent dry deposition: calculate ram and fricvel over ocean and sea ice; 
+    ! copy values over land
+    !--------------------------------------------------------------------------------
+    call calcram( state%ncol,                                              &! in
+                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
+                  obklen,          surfric,                                &! in; calculated above in tphysac
+                  state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
+                  cam_in%ram1,     cam_in%fv,                              &! in
+                  ram1,            fricvel                                 &! out; aerodynamical resistance and bulk friction velocity of a grid cell
+                  )
+
+    call outfld( 'RAM1',     ram1(:), pcols, lchnk )
+    call outfld( 'airFV', fricvel(:), pcols, lchnk )
+
+    ! Calculate deposition velocities and then the deposition processes
+
+    call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, cam_out, ptend )
     call physics_update(state, ptend, ztodt, tend)
+
     call t_stopf('aero_drydep')
     call cnd_diag_checkpoint( diag, 'AERDRYRM', state, pbuf, cam_in, cam_out )
 
