@@ -12,13 +12,10 @@ module modal_aero_drydep
   use modal_aero_data,only: cnst_name_cw
   use ppgrid,         only: pcols, pver, pverp
   use modal_aero_data,only: ntot_amode
-  use aerodep_flx,    only: aerodep_flx_prescribed
   use physconst,      only: rair, rhoh2o
-  use camsrfexch,     only: cam_out_t
   use physics_types,  only: physics_state, physics_ptend, physics_ptend_init
   use physics_buffer, only: physics_buffer_desc
   use physics_buffer, only: pbuf_get_field, pbuf_get_index, pbuf_set_field
-
   use cam_history,    only: outfld
 
   implicit none
@@ -32,7 +29,7 @@ contains
   ! Main subroutine of aerosol dry deposition parameterization.
   ! Also serves as the interface routine called by EAM's physics driver.
   !=============================================================================
-  subroutine aero_model_drydep  ( state, pbuf, ram1, fricvel, dt, cam_out, ptend )
+  subroutine aero_model_drydep  ( state, pbuf, ram1, fricvel, dt, aerdepdryis, aerdepdrycw, ptend )
 
     use aero_model,        only: drydep_lq, dgnumwet_idx, nmodes, wetdens_ap_idx
     use modal_aero_data,   only: qqcw_get_field
@@ -44,10 +41,8 @@ contains
     use modal_aero_data,   only: numptrcw_amode
     use modal_aero_data,   only: lmassptr_amode
     use modal_aero_data,   only: lmassptrcw_amode
-    use modal_aero_deposition, only: set_srf_drydep
 
     use modal_aero_drydep_utils, only: sedimentation_solver_for_1_tracer
-    use modal_aero_drydep_utils, only: calcram
 
     ! Arguments
 
@@ -56,9 +51,10 @@ contains
     real(r8),               intent(in)    :: ram1(pcols)    ! aerodynamical resistance, for turbulent dry deposition velocity [s/m]
     real(r8),               intent(in)    :: fricvel(pcols) ! friction velocity, for  turbulent dry deposition velocity [m/s]
     real(r8),               intent(in)    :: dt        ! time step [s]
-    type(cam_out_t),        intent(inout) :: cam_out   ! export state
     type(physics_ptend),    intent(out)   :: ptend     ! indivdual parameterization tendencies
 
+    real(r8),intent(out) :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),intent(out) :: aerdepdrycw(pcols,pcnst)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
 
     ! Local variables
 
@@ -87,9 +83,6 @@ contains
     real(r8) ::   rad_aer(pcols,pver)  ! volume mean wet radius of interstitial aerosols [m]
     real(r8) ::  dens_aer(pcols,pver)  ! wet density of interstitial aerosols [kg/m3]
     real(r8) ::    sg_aer(pcols,pver)  ! assumed geometric standard deviation of particle size distribution
-
-    real(r8) :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
-    real(r8) :: aerdepdrycw(pcols,pcnst)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
 
     ! Deposition velocities. The last dimension (size = 4) corresponds to the
     ! two attachment states and two moments:
@@ -249,15 +242,6 @@ contains
 
        enddo ! lspec = 1, nspec_amode(m)
     enddo    ! imode = 1, ntot_amode
-
-    !=====================================================================
-    ! Unless the user has specified prescribed aerosol dep fluxes,
-    ! copy the fluxes calculated here to cam_out to be passed to other 
-    ! components of the Earth System Model.
-    !=====================================================================
-    if (.not.aerodep_flx_prescribed()) then
-       call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
-    endif
 
   end subroutine aero_model_drydep
 

@@ -1354,8 +1354,12 @@ subroutine tphysac (ztodt,   cam_in,               &
     use tracers,            only: tracers_timestep_tend
     use aoa_tracers,        only: aoa_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
+
     use modal_aero_drydep_utils, only: calcram
-    use modal_aero_drydep,  only: aero_model_drydep
+    use modal_aero_drydep,       only: aero_model_drydep
+    use aerodep_flx,             only: aerodep_flx_prescribed
+    use modal_aero_deposition,   only: set_srf_drydep
+
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
     use check_energy,       only: check_energy_chng, &
@@ -1440,6 +1444,9 @@ subroutine tphysac (ztodt,   cam_in,               &
 
     real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
     real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+
+    real(r8) :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8) :: aerdepdrycw(pcols,pcnst)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
 
     ! physics buffer fields for total energy and mass adjustment
     integer itim_old, ifld
@@ -1689,22 +1696,33 @@ if (l_tracer_aero) then
                   obklen,          surfric,                                &! in; calculated above in tphysac
                   state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
                   cam_in%ram1,     cam_in%fv,                              &! in
-                  ram1,            fricvel                                 &! out; aerodynamical resistance and bulk friction velocity of a grid cell
+                  ram1,            fricvel   &! out; aerodynamical resistance and bulk friction velocity of a grid cell
                   )
 
     call outfld( 'RAM1',     ram1(:), pcols, lchnk )
     call outfld( 'airFV', fricvel(:), pcols, lchnk )
 
+    !--------------------------------------------------------------------------------
     ! Calculate deposition velocities and then the deposition processes
-
-    call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, cam_out, ptend )
+    !--------------------------------------------------------------------------------
+    call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, aerdepdrycw, ptend )
     call physics_update(state, ptend, ztodt, tend)
+
+    !--------------------------------------------------------------------------------
+    ! Unless the user has specified prescribed aerosol dep fluxes,
+    ! copy the fluxes calculated here to cam_out to be passed to other 
+    ! components of the Earth System Model.
+    !--------------------------------------------------------------------------------
+    if (.not.aerodep_flx_prescribed()) then 
+       call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
+    endif
 
     call t_stopf('aero_drydep')
     call cnd_diag_checkpoint( diag, 'AERDRYRM', state, pbuf, cam_in, cam_out )
 
+   !===================================================
    ! CARMA microphysics
-   !
+   !===================================================
    ! NOTE: This does both the timestep_tend for CARMA aerosols as well as doing the dry
    ! deposition for CARMA aerosols. It needs to follow vertical_diffusion_tend, so that
    ! obklen and surfric have been calculated. It needs to follow aero_model_drydep, so
