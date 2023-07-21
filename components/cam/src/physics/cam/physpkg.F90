@@ -1623,13 +1623,7 @@ if (l_vdiff) then
     ! Vertical diffusion/pbl calculation
     ! Call vertical diffusion code (pbl, free atmosphere and molecular)
     !===================================================
-
-    ! If CLUBB is called, do not call vertical diffusion, but obukov length and
-    !   surface friction velocity still need to be computed.  In addition, 
-    !   surface fluxes need to be updated here for constituents 
     if (do_clubb_sgs) then
-
-       call clubb_surface(state, cam_in, surfric, obklen)
      
        if (cflx_cpl_opt.eq.1) then 
           call cflx_tend(state, cam_in, ptend) 
@@ -1689,10 +1683,13 @@ if (l_tracer_aero) then
     !===================================================
     call t_startf('aero_drydep')
 
-    !--------------------------------------------------------------------------------
-    ! For turbulent dry deposition: calculate ram and fricvel over ocean and sea ice; 
-    ! copy values over land
-    !--------------------------------------------------------------------------------
+    !-----------------------------------------------------------------------------------
+    ! For turbulent dry deposition: 
+    !  - First, calculate Obukhov length and friction velocity.
+    !  - Then, calculate ram and fricvel over ocean and sea ice; copy values over land.
+    !-----------------------------------------------------------------------------------
+    if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
+
     call calcram( state%ncol,                                              &! in
                   cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
                   obklen,          surfric,                                &! in; calculated above in tphysac
