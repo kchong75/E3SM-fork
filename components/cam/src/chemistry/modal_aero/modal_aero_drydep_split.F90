@@ -5,47 +5,36 @@
 !  - changes in cloud-borne aerosol mixing ratios caused by 
 !    gravitational settling and turbulent dry deposition of cloud droplets.
 !===============================================================================
-module modal_aero_drydep
+module modal_aero_drydep_split
 
   use shr_kind_mod,   only: r8 => shr_kind_r8
-  use constituents,   only: pcnst, cnst_name
-  use modal_aero_data,only: cnst_name_cw
+  use constituents,   only: pcnst
   use ppgrid,         only: pcols, pver, pverp
-  use modal_aero_data,only: ntot_amode
-  use physconst,      only: rair, rhoh2o
-  use physics_types,  only: physics_state, physics_ptend, physics_ptend_init
-  use physics_buffer, only: physics_buffer_desc
-  use physics_buffer, only: pbuf_get_field, pbuf_get_index, pbuf_set_field
-  use cam_history,    only: outfld
 
   implicit none
   private
 
-  public :: aero_model_drydep
-
-  public :: drydep_diags_for_1_tracer
-  public :: modal_aero_depvel_part
+  public :: aero_model_drydep_interstitial
+  public :: aero_model_drydep_cloudborne
 
 contains
   
   !=============================================================================
-  ! Main subroutine of aerosol dry deposition parameterization.
+  ! Main subroutine for dry deposition of cloud-borne aerosols. 
   ! Also serves as the interface routine called by EAM's physics driver.
   !=============================================================================
-  subroutine aero_model_drydep  ( state, pbuf, ram1, fricvel, dt, aerdepdryis, aerdepdrycw, ptend )
+  subroutine aero_model_drydep_cloudborne  ( state, pbuf, ram1, fricvel, dt, aerdepdrycw )
 
-    use aero_model,        only: drydep_lq, dgnumwet_idx, nmodes, wetdens_ap_idx
-    use modal_aero_data,   only: qqcw_get_field
-    use modal_aero_data,   only: cnst_name_cw
-    use modal_aero_data,   only: alnsg_amode
-    use modal_aero_data,   only: sigmag_amode
-    use modal_aero_data,   only: nspec_amode
-    use modal_aero_data,   only: numptr_amode
-    use modal_aero_data,   only: numptrcw_amode
-    use modal_aero_data,   only: lmassptr_amode
-    use modal_aero_data,   only: lmassptrcw_amode
+    use physics_types,     only: physics_state
+    use physics_buffer,    only: physics_buffer_desc
+
+    use physconst,         only: rair, rhoh2o
+    use modal_aero_data,   only: ntot_amode, nspec_amode
+    use modal_aero_data,   only: qqcw_get_field, cnst_name_cw
+    use modal_aero_data,   only: numptrcw_amode, lmassptrcw_amode
 
     use modal_aero_drydep_utils, only: sedimentation_solver_for_1_tracer
+    use modal_aero_drydep,       only: drydep_diags_for_1_tracer, modal_aero_depvel_part
 
     ! Arguments
 
@@ -54,9 +43,7 @@ contains
     real(r8),               intent(in)    :: ram1(pcols)    ! aerodynamical resistance, for turbulent dry deposition velocity [s/m]
     real(r8),               intent(in)    :: fricvel(pcols) ! friction velocity, for  turbulent dry deposition velocity [m/s]
     real(r8),               intent(in)    :: dt        ! time step [s]
-    type(physics_ptend),    intent(out)   :: ptend     ! indivdual parameterization tendencies
 
-    real(r8),intent(out) :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
     real(r8),intent(out) :: aerdepdrycw(pcols,pcnst)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
 
     ! Local variables
@@ -65,7 +52,6 @@ contains
     real(r8), pointer :: pmid(:,:)   ! air pressure at layer midpoint [Pa]
     real(r8), pointer :: pint(:,:)   ! air pressure at layer interface [Pa]
     real(r8), pointer :: pdel(:,:)   ! layer thickness [Pa]
-
 
     integer :: lchnk   ! chunk identifier
     integer :: ncol    ! number of active atmospheric columns
@@ -83,9 +69,7 @@ contains
     real(r8) :: dens_drop(pcols,pver)  ! cloud droplet density [kg/m3]
     real(r8) ::   sg_drop(pcols,pver)  ! assumed geometric standard deviation of droplet size distribution
 
-    real(r8) ::   rad_aer(pcols,pver)  ! volume mean wet radius of interstitial aerosols [m]
-    real(r8) ::  dens_aer(pcols,pver)  ! wet density of interstitial aerosols [kg/m3]
-    real(r8) ::    sg_aer(pcols,pver)  ! assumed geometric standard deviation of particle size distribution
+    real(r8), pointer :: qq(:,:)            ! mixing ratio of a single tracer [kg/kg] or [1/kg]
 
     ! Deposition velocities. The last dimension (size = 4) corresponds to the
     ! two attachment states and two moments:
@@ -98,15 +82,9 @@ contains
     real(r8)::  vlc_trb(pcols,4)          ! dep velocity of turbulent dry deposition [m/s]
     real(r8) :: vlc_dry(pcols,pver,4)     ! dep velocity, sum of vlc_grv and vlc_trb [m/s]
 
-    ! The pointers below are used for retrieving information from pbuf
-
-    real(r8), pointer :: qq(:,:)            ! mixing ratio of a single tracer [kg/kg] or [1/kg]
-    real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
-    real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
-
-    !---------------------------------------------------------------------------
-    ! Retrieve input variables; initialize output (i.e., ptend).
-    !---------------------------------------------------------------------------
+    !---------------------------
+    ! Retrieve input variables
+    !---------------------------
     lchnk = state%lchnk
     ncol  = state%ncol
 
@@ -117,13 +95,6 @@ contains
 
     rho(:ncol,:)=  pmid(:ncol,:)/(rair*tair(:ncol,:))
 
-    call pbuf_get_field(pbuf, dgnumwet_idx,   dgncur_awet, start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
-    call pbuf_get_field(pbuf, wetdens_ap_idx, wetdens,     start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
-
-    call physics_ptend_init(ptend, state%psetcols, 'aero_model_drydep_ma', lq=drydep_lq)
-
-    !======================
-    ! cloud-borne aerosols
     !---------------------------------------------------------------------------------------
     ! Calculate gravitational settling and dry deposition velocities for cloud droplets 
     ! (and hence the cloud-borne aerosols therein).
@@ -183,6 +154,95 @@ contains
 
     enddo ! loop over number + constituents
     enddo ! imode = 1, ntot_amode
+
+  end subroutine aero_model_drydep_cloudborne
+
+  !------------------------------------------------------------
+  subroutine aero_model_drydep_interstitial  ( state, pbuf, ram1, fricvel, dt, aerdepdryis, ptend )
+
+    use cam_history,             only: outfld
+    use physics_buffer,          only: physics_buffer_desc, pbuf_get_field
+    use physics_types,           only: physics_state, physics_ptend, physics_ptend_init
+
+    use physconst,               only: rair
+    use modal_aero_data,         only: ntot_amode, nspec_amode
+    use constituents,            only: cnst_name
+    use modal_aero_data,         only: numptr_amode, lmassptr_amode
+    use modal_aero_data,         only: alnsg_amode, sigmag_amode
+    use aero_model,              only: drydep_lq, dgnumwet_idx, nmodes, wetdens_ap_idx
+    use modal_aero_drydep_utils, only: sedimentation_solver_for_1_tracer
+    use modal_aero_drydep,       only: drydep_diags_for_1_tracer, modal_aero_depvel_part
+
+    ! Arguments
+
+    type(physics_state),target,intent(in) :: state     ! Physics state variables
+    type(physics_buffer_desc), pointer    :: pbuf(:)
+    real(r8),               intent(in)    :: ram1(pcols)    ! aerodynamical resistance, for turbulent dry deposition velocity [s/m]
+    real(r8),               intent(in)    :: fricvel(pcols) ! friction velocity, for  turbulent dry deposition velocity [m/s]
+    real(r8),               intent(in)    :: dt        ! time step [s]
+
+    real(r8),               intent(out)   :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    type(physics_ptend),    intent(out)   :: ptend     ! indivdual parameterization tendencies
+
+    ! Local variables
+
+    real(r8), pointer :: tair(:,:)   ! air temperture [k]
+    real(r8), pointer :: pmid(:,:)   ! air pressure at layer midpoint [Pa]
+    real(r8), pointer :: pint(:,:)   ! air pressure at layer interface [Pa]
+    real(r8), pointer :: pdel(:,:)   ! layer thickness [Pa]
+
+    integer :: lchnk   ! chunk identifier
+    integer :: ncol    ! number of active atmospheric columns
+    integer :: lspec   ! index for aerosol number / chem-mass / water-mass
+    integer :: imode   ! aerosol mode index
+    integer :: icnst   ! tracer index
+    integer :: imnt    ! moment of the aerosol size distribution. 0 = number; 3 = volume
+    integer :: jvlc    ! index for last dimension of vlc_xxx arrays
+
+    real(r8) :: rho(pcols,pver)      ! air density [kg/m3]
+    real(r8) :: sflx(pcols)          ! surface deposition flux of a single species [kg/m2/s] or [1/m2/s]
+    real(r8) :: dqdt_tmp(pcols,pver) ! temporary array to hold tendency for 1 species, [kg/kg/s] or [1/kg/s]
+
+    real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
+    real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
+
+    real(r8) ::   rad_aer(pcols,pver)  ! volume mean wet radius of interstitial aerosols [m]
+    real(r8) ::  dens_aer(pcols,pver)  ! wet density of interstitial aerosols [kg/m3]
+    real(r8) ::    sg_aer(pcols,pver)  ! assumed geometric standard deviation of particle size distribution
+
+    real(r8), pointer :: qq(:,:)            ! mixing ratio of a single tracer [kg/kg] or [1/kg]
+
+    ! Deposition velocities. The last dimension (size = 4) corresponds to the
+    ! two attachment states and two moments:
+    !   1 - interstitial aerosol, 0th moment (i.e., number)
+    !   2 - interstitial aerosol, 3rd moment (i.e., volume/mass)
+    !   3 - cloud-borne aerosol,  0th moment (i.e., number)
+    !   4 - cloud-borne aerosol,  3rd moment (i.e., volume/mass)
+
+    real(r8) :: vlc_grv(pcols,pver,4)     ! dep velocity of gravitational settling [m/s]
+    real(r8)::  vlc_trb(pcols,4)          ! dep velocity of turbulent dry deposition [m/s]
+    real(r8) :: vlc_dry(pcols,pver,4)     ! dep velocity, sum of vlc_grv and vlc_trb [m/s]
+
+    !--------------------------
+    ! Retrieve input variables
+    !--------------------------
+    lchnk = state%lchnk
+    ncol  = state%ncol
+
+    tair => state%t(:,:)
+    pmid => state%pmid(:,:)
+    pint => state%pint(:,:)
+    pdel => state%pdel(:,:)
+
+    rho(:ncol,:)=  pmid(:ncol,:)/(rair*tair(:ncol,:))
+
+    call pbuf_get_field(pbuf, dgnumwet_idx,   dgncur_awet, start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+    call pbuf_get_field(pbuf, wetdens_ap_idx, wetdens,     start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+
+    !-------------------
+    ! Initialize ptend
+    !-------------------
+    call physics_ptend_init(ptend, state%psetcols, 'aero_model_drydep_ma', lq=drydep_lq)
 
     !=====================
     ! interstial aerosols
@@ -246,116 +306,6 @@ contains
        enddo ! lspec = 1, nspec_amode(m)
     enddo    ! imode = 1, ntot_amode
 
-  end subroutine aero_model_drydep
+  end subroutine aero_model_drydep_interstitial
 
-
-  !=================================================================================
-  ! Calculate some diagnostics for output. This does not affect time integration.
-  !=================================================================================
-  subroutine drydep_diags_for_1_tracer( lchnk, ncol, cnst_name_in, vlc_dry, vlc_trb, vlc_grv, sflx, dqdt_sed )
-
-    integer, intent(in) :: lchnk  ! chunk index
-    integer, intent(in) :: ncol   ! # of active columns 
-
-    character(len=*), intent(in) :: cnst_name_in  ! tracer name
-
-    real(r8),intent(in) :: vlc_trb(pcols)       ! deposition velocity of turbulent dry deposition [m/s]
-    real(r8),intent(in) :: vlc_grv(pcols,pver)  ! deposition velocity of gravitational settling [m/s]
-    real(r8),intent(in) :: vlc_dry(pcols,pver)  ! deposition velocity of both mechanisms combined  [m/s]
-    real(r8),intent(in) ::    sflx(pcols)       ! total deposition flux at the surface for one species [kg/m2/s] or [1/m2/s]
-
-    real(r8),intent(in),optional :: dqdt_sed(pcols,pver)
-
-    real(r8) :: dep_trb(pcols)       ! turbulent dry deposition portion of sflx [kg/m2/s] or [1/m2/s]
-    real(r8) :: dep_grv(pcols)       ! gravitational settling   portion of slfx [kg/m2/s] or [1/m2/s]
-    integer :: ii
-
-    ! apportion dry deposition into turb and gravitational settling for tapes
-
-    do ii=1,ncol
-       if (vlc_dry(ii,pver) .ne. 0._r8) then
-          dep_trb(ii)=sflx(ii)*vlc_trb(ii)/vlc_dry(ii,pver)
-          dep_grv(ii)=sflx(ii)*vlc_grv(ii,pver)/vlc_dry(ii,pver)
-       endif
-    enddo
-
-    ! send diagnostics to output
-
-    call outfld( cnst_name_in//'DDF', sflx,     pcols, lchnk)
-    call outfld( cnst_name_in//'TBF', dep_trb,  pcols, lchnk)
-    call outfld( cnst_name_in//'GVF', dep_grv,  pcols, lchnk)
-
-    if (present(dqdt_sed)) &
-    call outfld( cnst_name_in//'DTQ', dqdt_sed, pcols, lchnk)
-
-  end subroutine drydep_diags_for_1_tracer
-  !=============================================================================
-
-  !==========================================================================================
-  ! Calculate deposition velocities caused by turbulent dry deposition and
-  ! gravitational settling of aerosol particles
-
-  ! Reference: 
-  !  L. Zhang, S. Gong, J. Padro, and L. Barrie:
-  !  A size-seggregated particle dry deposition scheme for an atmospheric aerosol module
-  !  Atmospheric Environment, 35, 549-560, 2001.
-  !
-  ! History: 
-  !  - Original version by X. Liu.
-  !  - Calculations for gravitational and turbulent dry deposition separated into 
-  !    different subroutines by Hui Wan, 2023.
-  !==========================================================================================
-  subroutine modal_aero_depvel_part( ncol, lchnk, tair, pmid, ram1, fricvel,       &! in
-                                     radius_part, density_part, sig_part, moment,  &! in
-                                     vlc_dry, vlc_trb, vlc_grv                     )! out
-
-    use modal_aero_grav_setl,   only: modal_aero_gravit_settling_velocity
-    use modal_aero_turb_drydep, only: modal_aero_turb_drydep_velocity
-
-    integer,  intent(in) :: moment       ! moment of size distribution (0 for number, 2 for surface area, 3 for volume)
-    integer,  intent(in) :: ncol         ! # of grid columns to do calculations for
-    integer,  intent(in) :: lchnk        ! chunk index 
-
-    real(r8), intent(in) :: tair(pcols,pver)    ! air temperature [K]
-    real(r8), intent(in) :: pmid(pcols,pver)    ! air pressure [Pa]
-
-    real(r8), intent(in) :: ram1(pcols)     ! aerodynamical resistance [s/m]
-    real(r8), intent(in) :: fricvel(pcols)  ! sfc friction velocity from land model [m/s]
-
-    real(r8), intent(in) :: radius_part(pcols,pver)    ! mean (volume or number) particle radius [m]
-    real(r8), intent(in) :: density_part(pcols,pver)   ! density of particle material [kg/m3]
-    real(r8), intent(in) :: sig_part(pcols,pver)       ! geometric standard deviation of particle size distribution
-
-    real(r8), intent(out) :: vlc_grv(pcols,pver)    ! gravitational deposition velocity [m/s]
-    real(r8), intent(out) :: vlc_dry(pcols,pver)    ! total dry deposition velocity [m/s]
-    real(r8), intent(out) :: vlc_trb(pcols)         ! turbulent dry deposition velocity [m/s]
-
-    ! use a maximum radius of 50 microns when calculating deposition velocity
-
-    real(r8),parameter :: radius_max = 50.0e-6_r8
-
-    !------------------------------------------------------------------------------------
-    ! Calculate deposition velocity of gravitational settling in all grid layers
-    !------------------------------------------------------------------------------------
-    call modal_aero_gravit_settling_velocity( moment, ncol, pcols, pver, radius_max,           &! in
-                                              tair, pmid, radius_part, density_part, sig_part, &! in
-                                              vlc_grv                                          )! out
-
-    ! vlc_dry is just the gravitational settling velocity for now.
-    vlc_dry(:ncol,:)=vlc_grv(:ncol,:)
-
-    !------------------------------------------------------------------------------------
-    ! For the lowest model layer:
-    !  - Calculate turbulent dry deposition velocity, vlc_trb.
-    !  - Add vlc_trb to vlc_grv to give the total deposition velocity, vlc_dry.
-    !------------------------------------------------------------------------------------
-    call modal_aero_turb_drydep_velocity( moment, ncol, pcols, lchnk, radius_max,    &! in
-                                          tair(:,pver), pmid(:,pver),                &! in
-                                          radius_part(:,pver), density_part(:,pver), &! in
-                                          sig_part(:,pver),                          &! in
-                                          fricvel(:), ram1(:), vlc_grv(:,pver),      &! in
-                                          vlc_trb(:), vlc_dry(:,pver)                )! out
-
-  end subroutine modal_aero_depvel_part
-
-end module modal_aero_drydep
+end module modal_aero_drydep_split

@@ -1356,9 +1356,11 @@ subroutine tphysac (ztodt,   cam_in,               &
     use physconst,          only: rhoh2o, latvap,latice, rga
 
     use modal_aero_drydep_utils, only: calcram
-    use modal_aero_drydep,       only: aero_model_drydep
     use aerodep_flx,             only: aerodep_flx_prescribed
     use modal_aero_deposition,   only: set_srf_drydep
+    use modal_aero_drydep,       only: aero_model_drydep
+    use modal_aero_drydep_split, only: aero_model_drydep_interstitial
+    use modal_aero_drydep_split, only: aero_model_drydep_cloudborne
 
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
@@ -1705,7 +1707,10 @@ if (l_tracer_aero) then
     !--------------------------------------------------------------------------------
     ! Calculate deposition velocities and then the deposition processes
     !--------------------------------------------------------------------------------
-    call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, aerdepdrycw, ptend )
+   !call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, aerdepdrycw, ptend )
+
+    call aero_model_drydep_cloudborne  ( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw )
+    call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, ptend )
     call physics_update(state, ptend, ztodt, tend)
 
     !--------------------------------------------------------------------------------
