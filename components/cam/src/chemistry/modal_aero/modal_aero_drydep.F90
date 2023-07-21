@@ -242,6 +242,7 @@ contains
                                           ptend%q(:,:,icnst)                   )! in
 
           call outfld( trim(cnst_name(icnst))//'DDV', vlc_dry(:ncol,:,jvlc), pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
     enddo    ! imode = 1, ntot_amode

@@ -531,6 +531,8 @@ contains
        call addfld (trim(drydep_list(m))//'DDV',(/ 'lev' /), 'A','m/s', &
             trim(drydep_list(m))//' deposition velocity')
 
+       call addfld (trim(drydep_list(m))//'GVV',(/ 'lev' /), 'A','m/s', trim(drydep_list(m))//' gravitational deposition velocity')
+
        if ( history_aerosol ) then 
           call add_default (trim(drydep_list(m))//'DDF', 1, ' ')
           if ( history_verbose ) then
