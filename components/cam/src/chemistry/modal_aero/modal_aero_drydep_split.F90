@@ -309,4 +309,146 @@ contains
 
   end subroutine aero_model_drydep_interstitial
 
+  !------------------------------------------------------------
+  subroutine interstitial_aero_grav_setl_tend( state, pbuf, dt, aerdepdryis_grav, ptend )
+
+    use cam_history,             only: outfld
+    use physics_buffer,          only: physics_buffer_desc, pbuf_get_field
+    use physics_types,           only: physics_state, physics_ptend, physics_ptend_init
+
+    use physconst,               only: rair
+    use modal_aero_data,         only: ntot_amode, nspec_amode
+    use constituents,            only: cnst_name
+    use modal_aero_data,         only: numptr_amode, lmassptr_amode
+    use modal_aero_data,         only: alnsg_amode, sigmag_amode
+    use aero_model,              only: drydep_lq, dgnumwet_idx, nmodes, wetdens_ap_idx
+
+    use modal_aero_grav_setl,    only: modal_aero_gravit_settling_velocity
+    use modal_aero_drydep_utils, only: sedimentation_solver_for_1_tracer
+
+    ! Arguments
+
+    type(physics_state),target,intent(in) :: state     ! Physics state variables
+    type(physics_buffer_desc), pointer    :: pbuf(:)
+    real(r8),               intent(in)    :: dt        ! time step [s]
+
+    real(r8),               intent(out)   :: aerdepdryis_grav(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    type(physics_ptend),    intent(out)   :: ptend     ! indivdual parameterization tendencies
+
+    ! Local variables
+
+    real(r8), pointer :: tair(:,:)   ! air temperture [k]
+    real(r8), pointer :: pmid(:,:)   ! air pressure at layer midpoint [Pa]
+    real(r8), pointer :: pint(:,:)   ! air pressure at layer interface [Pa]
+    real(r8), pointer :: pdel(:,:)   ! layer thickness [Pa]
+
+    integer :: lchnk   ! chunk identifier
+    integer :: ncol    ! number of active atmospheric columns
+    integer :: lspec   ! index for aerosol number / chem-mass / water-mass
+    integer :: imode   ! aerosol mode index
+    integer :: icnst   ! tracer index
+    integer :: imnt    ! moment of the aerosol size distribution. 0 = number; 3 = volume
+    integer :: jvlc    ! index for last dimension of vlc_xxx arrays
+
+    real(r8) :: rho(pcols,pver)      ! air density [kg/m3]
+    real(r8) :: sflx(pcols)          ! surface deposition flux of a single species [kg/m2/s] or [1/m2/s]
+    real(r8) :: dqdt_tmp(pcols,pver) ! temporary array to hold tendency for 1 species, [kg/kg/s] or [1/kg/s]
+
+    real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
+    real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
+
+    real(r8) ::   rad_aer(pcols,pver)  ! volume mean wet radius of interstitial aerosols [m]
+    real(r8) ::  dens_aer(pcols,pver)  ! wet density of interstitial aerosols [kg/m3]
+    real(r8) ::    sg_aer(pcols,pver)  ! assumed geometric standard deviation of particle size distribution
+
+    real(r8), pointer :: qq(:,:)            ! mixing ratio of a single tracer [kg/kg] or [1/kg]
+
+    ! Deposition velocities. The last dimension (size = 4) corresponds to the
+    ! two attachment states and two moments:
+    !   1 - interstitial aerosol, 0th moment (i.e., number)
+    !   2 - interstitial aerosol, 3rd moment (i.e., volume/mass)
+    !   3 - cloud-borne aerosol,  0th moment (i.e., number)
+    !   4 - cloud-borne aerosol,  3rd moment (i.e., volume/mass)
+
+    real(r8) :: vlc_grv(pcols,pver,4)     ! dep velocity of gravitational settling [m/s]
+    real(r8)::  vlc_trb(pcols,4)          ! dep velocity of turbulent dry deposition [m/s]
+    real(r8) :: vlc_dry(pcols,pver,4)     ! dep velocity, sum of vlc_grv and vlc_trb [m/s]
+
+    real(r8),parameter :: radius_max = 50.0e-6_r8
+
+    !--------------------------
+    ! Retrieve input variables
+    !--------------------------
+    lchnk = state%lchnk
+    ncol  = state%ncol
+
+    tair => state%t(:,:)
+    pmid => state%pmid(:,:)
+    pint => state%pint(:,:)
+    pdel => state%pdel(:,:)
+
+    rho(:ncol,:)=  pmid(:ncol,:)/(rair*tair(:ncol,:))
+
+    call pbuf_get_field(pbuf, dgnumwet_idx,   dgncur_awet, start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+    call pbuf_get_field(pbuf, wetdens_ap_idx, wetdens,     start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+
+    !-------------------
+    ! Initialize ptend
+    !-------------------
+    call physics_ptend_init(ptend, state%psetcols, 'interstitial_aero_grav_setl', lq=drydep_lq)
+
+    !=====================
+    ! interstial aerosols
+    !=====================
+    do imode = 1, ntot_amode   ! loop over aerosol modes
+
+       !-----------------------------------------------------------------
+       ! Calculate gravitational settling and dry deposition velocities for 
+       ! interstitial aerosol particles in a single lognormal mode. Note:
+       !  One set of velocities for number mixing ratio of the mode;
+       !  One set of velocities for all mass mixing ratios of the mode.
+       !-----------------------------------------------------------------
+        rad_aer(1:ncol,:) = 0.5_r8*dgncur_awet(1:ncol,:,imode) *exp(1.5_r8*(alnsg_amode(imode)**2))
+       dens_aer(1:ncol,:) = wetdens(1:ncol,:,imode)
+         sg_aer(1:ncol,:) = sigmag_amode(imode)
+
+       jvlc = 1  ; imnt = 0  ! interstitial aerosol number
+       call modal_aero_gravit_settling_velocity( imnt, ncol, pcols, pver, radius_max,   &! in
+                                                 tair, pmid, rad_aer, dens_aer, sg_aer, &! in
+                                                 vlc_grv(:,:,jvlc)                      )! out
+
+       jvlc = 2  ; imnt = 3  ! interstitial aerosol volume/mass
+       call modal_aero_gravit_settling_velocity( imnt, ncol, pcols, pver, radius_max,   &! in
+                                                 tair, pmid, rad_aer, dens_aer, sg_aer, &! in
+                                                 vlc_grv(:,:,jvlc)                      )! out
+
+       !-----------------------------------------------------------
+       ! Loop over number + mass species of the mode. 
+       ! Calculate drydep-induced tendencies; save to ptend.
+       !-----------------------------------------------------------
+       do lspec = 0, nspec_amode(imode)
+
+          if (lspec == 0) then   ! number
+             icnst = numptr_amode(imode) ; jvlc = 1
+          else ! aerosol mass
+             icnst = lmassptr_amode(lspec,imode) ; jvlc = 2
+          endif
+
+          qq => state%q(:,:,icnst)
+          call sedimentation_solver_for_1_tracer( ncol, dt, vlc_grv(:,:,jvlc), qq,    &! in
+                                                  rho, tair, pint, pmid, pdel,        &! in
+                                                  dqdt_tmp, sflx                      )! out
+
+          aerdepdryis_grav(:ncol,icnst) = sflx(:ncol)
+          ptend%lq(icnst) = .true.
+          ptend%q(:ncol,:,icnst) = dqdt_tmp(:ncol,:)
+
+          call outfld( trim(cnst_name(icnst))//'GVF',    sflx(:ncol),        pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'GVV', vlc_dry(:ncol,:,jvlc), pcols, lchnk )
+
+       enddo ! lspec = 1, nspec_amode(m)
+    enddo    ! imode = 1, ntot_amode
+
+  end subroutine interstitial_aero_grav_setl_tend
+
 end module modal_aero_drydep_split
