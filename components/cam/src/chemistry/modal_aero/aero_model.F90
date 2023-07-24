@@ -34,6 +34,7 @@ module aero_model
   public :: aero_model_wetdep     ! aerosol wet removal
   public :: aero_model_emissions  ! aerosol emissions
   public :: aero_model_surfarea   ! aerosol surface area for chemistry
+  public :: aero_model_drydep
 
   public :: nmodes
   public :: dgnumwet_idx

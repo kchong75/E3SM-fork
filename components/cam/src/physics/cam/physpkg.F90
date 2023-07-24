@@ -156,6 +156,7 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use cld_cpl_utils,      only: cld_cpl_register
+    use modal_aero_drydep_split,only: modal_aero_drydep_register
 
     !---------------------------Local variables-----------------------------
     !
@@ -262,6 +263,7 @@ subroutine phys_register
        if (clim_modal_aero) then
           call modal_aero_calcsize_reg()
           call modal_aero_wateruptake_reg()
+          call modal_aero_drydep_register
        endif
 
        ! register chemical constituents including aerosols ...
@@ -1355,12 +1357,14 @@ subroutine tphysac (ztodt,   cam_in,               &
     use aoa_tracers,        only: aoa_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
 
-    use modal_aero_drydep_utils, only: calcram
-    use aerodep_flx,             only: aerodep_flx_prescribed
-    use modal_aero_deposition,   only: set_srf_drydep
-    use modal_aero_drydep,       only: aero_model_drydep
+    use aero_model,              only: aero_model_drydep_old => aero_model_drydep
+
+    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel
     use modal_aero_drydep_split, only: aero_model_drydep_interstitial
     use modal_aero_drydep_split, only: aero_model_drydep_cloudborne
+    use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
+    use aerodep_flx,             only: aerodep_flx_prescribed
+    use modal_aero_deposition,   only: set_srf_drydep
 
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
@@ -1447,8 +1451,13 @@ subroutine tphysac (ztodt,   cam_in,               &
     real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
     real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
 
-    real(r8) :: aerdepdryis(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
-    real(r8) :: aerdepdrycw(pcols,pcnst)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),pointer :: aerdepdryis(:,:)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),pointer :: aerdepdrycw(:,:)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),pointer :: vlc_grv(:,:,:,:)
+
+    real(r8) :: dt_fac_grav_setl
+
+    real(r8) :: aerdepdryis_grv(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
 
     ! physics buffer fields for total energy and mass adjustment
     integer itim_old, ifld
@@ -1679,46 +1688,81 @@ end if ! l_rayleigh
 if (l_tracer_aero) then
 
     !===================================================
-    !  aerosol dry deposition processes
+    ! Aerosol dry deposition processes
     !===================================================
     call t_startf('aero_drydep')
 
-    !-----------------------------------------------------------------------------------
-    ! For turbulent dry deposition: 
-    !  - First, calculate Obukhov length and friction velocity.
-    !  - Then, calculate ram and fricvel over ocean and sea ice; copy values over land.
-    !-----------------------------------------------------------------------------------
-    if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
+    if ( cflx_cpl_opt <= 4 ) then
+       !---------------------------------------------------------------
+       ! Calculate both grav setl and turb dry dep for both cloud-borne
+       ! and interstitial aerosols,  using the old code
+       !---------------------------------------------------------------
+       if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
+       call aero_model_drydep_old( state, pbuf, obklen, surfric, cam_in, ztodt, cam_out, ptend )
+       call physics_update(state, ptend, ztodt, tend)
 
-    call calcram( state%ncol,                                              &! in
-                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
-                  obklen,          surfric,                                &! in; calculated above in tphysac
-                  state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
-                  cam_in%ram1,     cam_in%fv,                              &! in
-                  ram1,            fricvel   &! out; aerodynamical resistance and bulk friction velocity of a grid cell
-                  )
+    else
+       !---------------------------------------------------------------
+       ! pbuf variables
+       !---------------------------------------------------------------
+       call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
+       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
+       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
+  
+       !---------------------------------------------------------------
+       ! Cloud-borne aerosols only, both grav setl and turb dry dep
+       !---------------------------------------------------------------
+       call get_gridcell_ram1_fricvel(state, cam_in, ram1, fricvel)
+       call aero_model_drydep_cloudborne( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw )
 
-    call outfld( 'RAM1',     ram1(:), pcols, lchnk )
-    call outfld( 'airFV', fricvel(:), pcols, lchnk )
+       call outfld( 'RAM1',     ram1(:), pcols, lchnk )
+       call outfld( 'airFV', fricvel(:), pcols, lchnk )
 
-    !--------------------------------------------------------------------------------
-    ! Calculate deposition velocities and then the deposition processes
-    !--------------------------------------------------------------------------------
-   !call aero_model_drydep( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, aerdepdrycw, ptend )
+       !---------------------------------------------------------------
+       ! Interstitial aerosols
+       !---------------------------------------------------------------
+       select case (cflx_cpl_opt)
+       case(40)
+         !---------------------------------------------------------------
+         ! Interstitial aerosols: both grav setl and turb dry dep
+         !---------------------------------------------------------------
+         call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, ptend )
+         call physics_update(state, ptend, ztodt, tend)
 
-    call aero_model_drydep_cloudborne  ( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw )
-    call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, ptend )
-    call physics_update(state, ptend, ztodt, tend)
+         ! Unless the user has specified prescribed aerosol dep fluxes,
+         ! copy the fluxes calculated here to cam_out to be passed to other 
+         ! components of the Earth System Model.
+         if (.not.aerodep_flx_prescribed()) then 
+            call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
+         endif
 
-    !--------------------------------------------------------------------------------
-    ! Unless the user has specified prescribed aerosol dep fluxes,
-    ! copy the fluxes calculated here to cam_out to be passed to other 
-    ! components of the Earth System Model.
-    !--------------------------------------------------------------------------------
-    if (.not.aerodep_flx_prescribed()) then 
-       call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
-    endif
+       case(41,43)
+         !--------------------------------------------------------------------------------------
+         ! Interstitial aerosols: gravitational settling only, for a full ztodt or half ztodt
+         !--------------------------------------------------------------------------------------
+         if (cflx_cpl_opt==41) dt_fac_grav_setl = 1._r8
+         if (cflx_cpl_opt==43) dt_fac_grav_setl = .5_r8
 
+         call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
+         call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
+
+         ! Save surface flux of gravitational settling. (Turb. drydep flux is added later in tphysbc.)
+
+         aerdepdryis(:ncol,:) = dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
+
+         call endrun ('TPHYSAC error: cflx_cpl_opt = 41 not fully implemented')
+
+       case(42,44)
+         ! Nothing to do here. Full-time-step calculation of gravitational settling is
+         ! done later after or during cloud mac-mic subcycles; Turbulent dry deposition
+         ! is merged with dropmix nuc.
+         call endrun ('TPHYSAC error: cflx_cpl_opt = 42, 44 not fully implemented')
+
+       case default
+         call endrun ('TPHYSAC error: unrecognized cflx_cpl_opt value')
+       end select
+
+    end if
     call t_stopf('aero_drydep')
     call cnd_diag_checkpoint( diag, 'AERDRYRM', state, pbuf, cam_in, cam_out )
 
@@ -2645,7 +2689,7 @@ end if
              call cflx_tend(state, cam_in, ptend)
              call physics_update(state, ptend, cld_macmic_ztodt)
 
-          else if (cflx_cpl_opt.eq.4) then
+          else if ( (cflx_cpl_opt.eq.4) .or. ((cflx_cpl_opt/10).eq.4) ) then
           ! Calculate ptend%q from cam_in%cflx for constituents 2:pcnst.
           ! Save aerosol tendencies in aero_cflx_tend;
           ! Apply tendencies of other constitutents.

@@ -14,13 +14,32 @@ module modal_aero_drydep_split
   implicit none
   private
 
+  public :: modal_aero_drydep_register
   public :: aero_model_drydep_interstitial
   public :: aero_model_drydep_cloudborne
+  public :: interstitial_aero_grav_setl_tend
+
 
   real(r8),parameter :: radius_max = 50.0e-6_r8
 
 contains
-  
+
+  subroutine modal_aero_drydep_register
+  !----------------------------------------------------------------------- 
+  ! Purpose: Register pbuf fields for aerosols needed by dry deposition
+  ! Author: Hui Wan, July 2023
+  !-----------------------------------------------------------------------
+  use physics_buffer, only: pbuf_add_field, dtype_r8
+  use modal_aero_data,only: ntot_amode
+
+  integer :: idx
+
+  call pbuf_add_field('AMODEGVV',   'global',dtype_r8,(/pcols,pver,4,ntot_amode/), idx)
+  call pbuf_add_field('AERDEPDRYIS','global',dtype_r8,(/pcols,pcnst/),             idx)
+  call pbuf_add_field('AERDEPDRYCW','global',dtype_r8,(/pcols,pcnst/),             idx)
+
+  end subroutine modal_aero_drydep_register
+
   !=============================================================================
   ! Main subroutine for dry deposition of cloud-borne aerosols. 
   ! Also serves as the interface routine called by EAM's physics driver.
@@ -465,22 +484,21 @@ contains
   end subroutine interstitial_aero_grav_setl_tend
 
   !------------------------------------------------
-  subroutine interstitial_aero_turb_dep_velocity( state, pbuf, cam_in, vlc_grv, vlc_trb, vlc_dry )
+  subroutine interstitial_aero_turb_dep_velocity( state, pbuf, ram1, fricvel, vlc_grv, vlc_trb, vlc_dry )
 
     use physics_types,    only: physics_state
     use physics_buffer,   only: physics_buffer_desc, pbuf_get_field
-    use camsrfexch,       only: cam_in_t
     use modal_aero_data,  only: ntot_amode
     use modal_aero_data,  only: alnsg_amode, sigmag_amode
     use aero_model,       only: dgnumwet_idx, wetdens_ap_idx, nmodes
 
     use modal_aero_turb_drydep, only: modal_aero_turb_drydep_velocity
-    use clubb_intr,             only: clubb_surface
-    use modal_aero_drydep_utils,only: calcram
 
     type(physics_state),    intent(in) :: state
     type(physics_buffer_desc), pointer :: pbuf(:)
-    type(cam_in_t),         intent(in) :: cam_in
+
+    real(r8),intent(in)  ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+    real(r8),intent(in)  :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
 
     real(r8),intent(in)  :: vlc_grv(pcols,4,ntot_amode)  !  gravitational settling   velocity in lowest layer 
     real(r8),intent(out) :: vlc_trb(pcols,4,ntot_amode)  !  turbulent dry deposition velocity in lowest layer 
@@ -488,14 +506,10 @@ contains
 
     integer :: ncol
 
-    real(r8) :: surfric(pcols)     ! surface friction velocity
-    real(r8) ::  obklen(pcols)     ! Obukhov length
     real(r8) ::    tair(pcols)
     real(r8) ::    pmid(pcols)
     real(r8) ::    pdel(pcols)
 
-    real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
-    real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
 
     real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
     real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
@@ -517,19 +531,6 @@ contains
     tair = state%t(:,pver)
     pmid = state%pmid(:,pver)
     pdel = state%pdel(:,pver)
-
-    !-------------------------------------------------------------------------
-    ! Calculate ram and fricvel over ocean and sea ice; copy values over land
-    !-------------------------------------------------------------------------
-    call clubb_surface(state, cam_in, surfric, obklen)
-    call calcram( ncol,                                             &! in
-                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,  &! in
-                  obklen, surfric,  &! in, calculated above
-                  tair, pmid, pdel, &! in, bottom level only
-                  cam_in%ram1,      &! in
-                  cam_in%fv,        &! in
-                  ram1, fricvel     &! out, aerodynamical resistance and bulk friction velocity of a grid cell
-                  )
 
     !-----------------------------------------------------------------
     ! Calculate gravitational settling and dry deposition velocities for 

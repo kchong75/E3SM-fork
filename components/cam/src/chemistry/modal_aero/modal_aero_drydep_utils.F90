@@ -103,6 +103,31 @@ contains
   end subroutine sedimentation_solver_for_1_tracer
 
 
+  subroutine get_gridcell_ram1_fricvel( state, cam_in, ram1, fricvel )
+
+    use physics_types,          only: physics_state
+    use camsrfexch,             only: cam_in_t
+    use clubb_intr,             only: clubb_surface
+
+    type(physics_state),    intent(in) :: state
+    type(cam_in_t),         intent(in) :: cam_in
+
+    real(r8),intent(out) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+    real(r8),intent(out) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+
+    real(r8) :: surfric(pcols)     ! surface friction velocity
+    real(r8) ::  obklen(pcols)     ! Obukhov length
+
+    call clubb_surface(state, cam_in, surfric, obklen)
+    call calcram( state%ncol,                                              &! in
+                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
+                  obklen,          surfric,                                &! in; calculated above in tphysac
+                  state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
+                  cam_in%ram1,     cam_in%fv,                              &! in
+                  ram1,            fricvel                               )  ! out
+
+  end subroutine get_gridcell_ram1_fricvel
+
   !---------------------------------------------------------------------------------
   ! !DESCRIPTION: 
   !  
