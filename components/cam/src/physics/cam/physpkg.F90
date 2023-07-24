@@ -1753,9 +1753,14 @@ if (l_tracer_aero) then
          call endrun ('TPHYSAC error: cflx_cpl_opt = 41 not fully implemented')
 
        case(42,44)
-         ! Nothing to do here. Full-time-step calculation of gravitational settling is
-         ! done later after or during cloud mac-mic subcycles; Turbulent dry deposition
-         ! is merged with dropmix nuc.
+         ! Nothing to do here other than initialize the accumulated dry dep flux of interstitial aerosols.
+         ! (The accumulation is supposed to be done over an atm-sfc coupling timestep.)
+         ! Full-time-step calculation of gravitational settling is
+         ! done later after or during cloud mac-mic subcycles;
+         ! Turbulent dry deposition is done together with dropmix nuc.
+
+         aerdepdryis(:ncol,:) = 0._r8
+
          call endrun ('TPHYSAC error: cflx_cpl_opt = 42, 44 not fully implemented')
 
        case default
@@ -2030,7 +2035,11 @@ subroutine tphysbc (ztodt,                          &
     use phys_control,    only: use_qqflx_fixer, use_mass_borrower
     use nudging,         only: Nudge_Model,Nudge_Loc_PhysOut,nudging_calc_tend
     use cld_cpl_utils,   only: set_state_and_tendencies, save_state_snapshot_to_pbuf
-    use sfc_cpl_opt,     only: cflx_tend
+
+    use sfc_cpl_opt,             only: cflx_tend
+    use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
+    use aerodep_flx,             only: aerodep_flx_prescribed
+    use modal_aero_deposition,   only: set_srf_drydep
 
     implicit none
 
@@ -2222,6 +2231,13 @@ subroutine tphysbc (ztodt,                          &
     integer :: cflx_cpl_opt
     real(r8) :: aero_cflx_tend(pcols,pcnst)
 
+    real(r8),pointer :: aerdepdryis(:,:)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),pointer :: aerdepdrycw(:,:)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8),pointer :: vlc_grv(:,:,:,:)
+    real(r8) :: dt_fac_grav_setl
+
+    real(r8) :: aerdepdryis_grv(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+
     call phys_getopts( microp_scheme_out      = microp_scheme, &
                        macrop_scheme_out      = macrop_scheme, &
                        use_subcol_microp_out  = use_subcol_microp, &
@@ -2255,6 +2271,14 @@ subroutine tphysbc (ztodt,                          &
     rtdt = 1._r8/ztodt
 
     nstep = get_nstep()
+
+    !---------------------------
+    if (cflx_cpl_opt.ge.41) then
+      call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
+      call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
+      call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
+    end if
+    !-----
 
     if (pergro_test_active) then 
        !call outfld calls
@@ -2656,7 +2680,9 @@ end if
        call cnd_diag_checkpoint( diag, 'BF_MACMIC', state, pbuf, cam_in, cam_out )
 
        !-----------------------------------------------------------------------------------
-       ! cflx option 2: isolated sequential splitting with revised sequence 
+       ! cflx option 2: 
+       ! - parallel splitting between surface emissions and drydep,
+       ! - sequentially apply turb mixing afterwards
 
        if (cflx_cpl_opt.eq.2) then
           call cflx_tend(state, cam_in, ptend)
@@ -2678,8 +2704,9 @@ end if
           end if
 
           !-------------------------------------------------
-          ! cflx option 3 or 4: dribbling or forcing method
-
+          ! cflx option 3 or 4: dribbling or forcing method for coupling surface
+          ! emissions with turbulent mixing
+          !-------------------------------------------------
           aero_cflx_tend(:,:) = 0._r8
 
           if (cflx_cpl_opt.eq.3) then
@@ -2876,6 +2903,20 @@ end if
 
           call cnd_diag_checkpoint( diag, 'CLDMIC'//char_macmic_it, state, pbuf, cam_in, cam_out )
 
+          !------------------------------------------------------------------------------
+          ! Graviational settling of interstitial aerosols for a full ztodt
+          !------------------------------------------------------------------------------
+          if ( (cflx_cpl_opt.eq.44) .and. (macmic_it==(cld_macmic_num_steps/2)) ) then
+
+            dt_fac_grav_setl = 1._r8
+            call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
+            call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
+
+            aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
+
+          end if 
+          !----------
+
        end do ! end substepping over macrophysics/microphysics
 
        prec_sed(:ncol) = prec_sed_macmic(:ncol)/cld_macmic_num_steps
@@ -2901,7 +2942,38 @@ end if
      end if ! l_st_mic
 
      call cnd_diag_checkpoint( diag, 'STCLD', state, pbuf, cam_in, cam_out )
-     !---------------------------------------------------------------------
+     !==========================================================================
+
+
+     !------------------------------------------------------------------------------
+     ! Finish the remaining part of aerosol dry deposition calculations 
+     !------------------------------------------------------------------------------
+     ! Graviational settling of interstitial aerosols for a full ztodt or half ztodt
+
+     select case (cflx_cpl_opt)
+     case(42,43)
+       if (cflx_cpl_opt==42) dt_fac_grav_setl = 1._r8
+       if (cflx_cpl_opt==43) dt_fac_grav_setl = .5_r8
+
+       call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
+       call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
+
+       ! Add surface flux of gravitational settling to the total flux of interstitial aerosols
+       aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
+
+     end select
+
+     select case (cflx_cpl_opt)
+     case(41,42,43,44)
+       !---------------------------------------------------------------
+       ! Unless the user has specified prescribed aerosol dep fluxes,
+       ! copy the fluxes calculated here to cam_out to be passed to other 
+       ! components of the Earth System Model.
+       if (.not.aerodep_flx_prescribed()) then
+          call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
+       endif
+     end select
+     !------------------------------------------------------------------------------
 
 if (l_tracer_aero) then
 
