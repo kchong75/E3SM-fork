@@ -2038,6 +2038,8 @@ subroutine tphysbc (ztodt,                          &
 
     use sfc_cpl_opt,             only: cflx_tend
     use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
+    use modal_aero_drydep_split, only: interstitial_aero_turb_dep_velocity
+    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel
     use aerodep_flx,             only: aerodep_flx_prescribed
     use modal_aero_deposition,   only: set_srf_drydep
 
@@ -2231,12 +2233,17 @@ subroutine tphysbc (ztodt,                          &
     integer :: cflx_cpl_opt
     real(r8) :: aero_cflx_tend(pcols,pcnst)
 
+    real(r8) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+    real(r8) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+
     real(r8),pointer :: aerdepdryis(:,:)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
     real(r8),pointer :: aerdepdrycw(:,:)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
-    real(r8),pointer :: vlc_grv(:,:,:,:)
+    real(r8),pointer :: vlc_grv(:,:,:,:) ! grav setl velocity of aerosol particles
+    real(r8),pointer :: vlc_trb(:,:,:)   ! turb dry dep velocity of aerosol particles
     real(r8) :: dt_fac_grav_setl
 
     real(r8) :: aerdepdryis_grv(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
+    real(r8) :: aerdepdryis_trb(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
 
     call phys_getopts( microp_scheme_out      = microp_scheme, &
                        macrop_scheme_out      = macrop_scheme, &
@@ -2273,11 +2280,15 @@ subroutine tphysbc (ztodt,                          &
     nstep = get_nstep()
 
     !---------------------------
-    if (cflx_cpl_opt.ge.41) then
+    select case (cflx_cpl_opt)
+    case(41,42,43,44)
+    ! Turb dry dep of interstitial aerosols is treated together with turb mixing.
+    !
       call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
+      call pbuf_get_field(pbuf, pbuf_get_index('AMODETBV'),    vlc_trb )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
-    end if
+    end select 
     !-----
 
     if (pergro_test_active) then 
@@ -2726,7 +2737,34 @@ end if
           end if
 
           call cnd_diag_checkpoint( diag, 'CFLX3_'//char_macmic_it, state, pbuf, cam_in, cam_out )
+
           !--------------
+          select case (cflx_cpl_opt)
+          case(41,42,43,44)
+          ! Calculate turbulent dry dep velocities.
+          ! Considering that the velocities are functions of particle size and hence
+          ! mass and mixing ratios, it would be more accurate if the velocities were
+          ! recalculated every time the mixing ratios were updated, i.e., within the
+          ! subcycles in dropmixnuc. However, 
+          !  - the particle sizes used in the velocity calculation are the wet sizes
+          !    which (currently) are updated only once every "physics" time step; 
+          !  - info in cam_in, which is used for calculating ram1 and fricvel, is
+          !    updated only when the atmosphere exchanges info with the surface;
+          !  - state%t does change more often, although probably not that much.
+          ! Therefore we start with placing the velocity calculation here.
+
+             call get_gridcell_ram1_fricvel( state, cam_in, &! in
+                                             ram1,  fricvel )! out
+
+             call interstitial_aero_turb_dep_velocity(state, pbuf, ram1, fricvel, &! in
+                                                      vlc_grv(:,:,pver,:),        &! in 
+                                                      vlc_trb(:,:,     :)         )! inout
+
+             call outfld( 'RAM1',     ram1(:), pcols, lchnk )
+             call outfld( 'airFV', fricvel(:), pcols, lchnk )
+
+          end select 
+          !---------------------------
 
           if (micro_do_icesupersat) then 
 
