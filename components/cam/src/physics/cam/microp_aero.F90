@@ -388,7 +388,7 @@ end subroutine microp_aero_readnl
 !=========================================================================================
 
 subroutine microp_aero_run ( &
-   state, ptend, deltatin, pbuf, liqcldfo, aero_cflx_tend)
+   state, ptend, deltatin, pbuf, liqcldfo, aero_cflx_tend, vlc_trb )
 
    ! input arguments
    type(physics_state), target, intent(in)    :: state
@@ -399,8 +399,10 @@ subroutine microp_aero_run ( &
 
    real(r8), intent(in) :: aero_cflx_tend(:,:)  ! Aerosol mixing ratio tendencies corresponding to cam_in%cflx.
                                                 ! Dimension sizes are expected to be (pcols,pcnst).
-                                                ! These are all zeros unless cflx_cpl_opt = 4.
+                                                ! These are all zeros unless cflx_cpl_opt = 4 or 40+
                                                 ! POC Hui.Wan@pnnl.gov
+
+   real(r8), intent(in) :: vlc_trb(:,:,:)  ! Turbulent dry deposition velocities of mass and number of different modes. 
 
    ! local workspace
    ! all units mks unless otherwise stated
@@ -738,7 +740,7 @@ subroutine microp_aero_run ( &
 
       call t_startf('dropmixnuc')
       call dropmixnuc( &
-         state, ptend, deltatin, pbuf, wsub, aero_cflx_tend, &
+         state, ptend, deltatin, pbuf, wsub, aero_cflx_tend, vlc_trb, &
          lcldn, lcldo, nctend_mixnuc, factnum)
       call t_stopf('dropmixnuc')
 

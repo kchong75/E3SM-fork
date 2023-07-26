@@ -297,7 +297,7 @@ end subroutine ndrop_init
 !===============================================================================
 
 subroutine dropmixnuc( &
-   state, ptend, dtmicro, pbuf, wsub, aero_cflx_tend_host, &
+   state, ptend, dtmicro, pbuf, wsub, aero_cflx_tend_host, vlc_trb_host, &
    cldn, cldo, tendnd, factnum)
 
    ! vertical diffusion and nucleation of cloud droplets
@@ -322,6 +322,8 @@ subroutine dropmixnuc( &
                                                      ! Dimension sizes are expected to be (pcols,pcnst).
                                                      ! These are all zeros unless cflx_cpl_opt = 4.
                                                      ! POC Hui.Wan@pnnl.gov
+
+   real(r8), intent(in) :: vlc_trb_host(:,:,:)   ! Turbulent dry deposition velocities of mass and number of different modes. 
 
    ! output arguments
    real(r8), intent(out) :: tendnd(pcols,pver) ! change in droplet number concentration (#/kg/s)
@@ -379,6 +381,7 @@ subroutine dropmixnuc( &
 
    real(r8) :: zn(pver)   ! g/pdel (m2/g) for layer
    real(r8) :: flxconv    ! convergence of flux into lowest layer
+   real(r8) :: surfrate   ! surface exchange rate (/s)
 
    real(r8) :: wdiab           ! diabatic vertical velocity
    real(r8) :: ekd(pver)       ! diffusivity for droplets (m2/s)
@@ -409,6 +412,9 @@ subroutine dropmixnuc( &
    real(r8), allocatable :: raercol_cw(:,:,:) ! same as raercol but for cloud-borne phase
 
    real(r8), allocatable :: raer_tend_cflx(:) ! single cell of aerosol mixing ratio tendencies corresponding to cam_in%clfx
+                                              ! It is an array because there are multiple species.
+
+   real(r8), allocatable :: raer_surfrate(:)  ! turbulent dry deposition velocity of interstitial aerosols divided by bottom layer thickness
                                               ! It is an array because there are multiple species.
    integer :: imode, ispec, icnst
 
@@ -488,6 +494,7 @@ subroutine dropmixnuc( &
       raer(ncnst_tot),                &
       qqcw(ncnst_tot),                &
       raer_tend_cflx(ncnst_tot),      &
+      raer_surfrate(ncnst_tot),       &
       raercol(pver,ncnst_tot,2),      &
       raercol_cw(pver,ncnst_tot,2),   &
       coltend(pcols,ncnst_tot),       &
@@ -605,16 +612,38 @@ subroutine dropmixnuc( &
       end do
 
       !-------------------------------------------------------------------------
-      ! Load aerosol mass and number emissions 
+      ! Load aerosol mass and number emissions:
+      ! For the current grid cell with the index i, loop through all species
+      ! (including mass and number) in all lognormal modes. 
+      ! Look up the emission-induced tendencies from the host model's data structure
+      ! and save them in MAM's internal data structure.
       !-------------------------------------------------------------------------
       do imode = 1, ntot_amode
       do ispec = 0, nspec_amode(imode)
 
-          mm    = mam_idx(imode,ispec)       !mam's index
-          icnst = mam_cnst_idx(imode,ispec)  !host's index
+          mm    = mam_idx(imode,ispec)       ! mam's index
+          icnst = mam_cnst_idx(imode,ispec)  ! host's index
 
           raer_tend_cflx(mm) = aero_cflx_tend_host(i,icnst)
       end do
+      end do
+
+      !------------------------------------------------------------------------------
+      ! Load turbulent dry deposition velocities of aerosol mass and number:
+      ! For the current grid cell with the index i, loop through all lognormal modes.
+      ! Within each mode, there is one deposition velocity for the number mixing ratio
+      ! and one deposition velocity for all mass mixing ratios.
+      !------------------------------------------------------------------------------
+      do imode = 1, ntot_amode
+
+         ispec = 0                 ! number mixing ratio
+         mm = mam_idx(imode,ispec) ! mam's species index
+         raer_surfrate(mm) = vlc_trb_host(i,1,imode)/dz(i,pver)
+
+         do ispec = 1, nspec_amode(imode)  ! mass mixing ratios
+            mm = mam_idx(imode,ispec)      ! mam's species index
+            raer_surfrate(mm) = vlc_trb_host(i,2,imode)/dz(i,pver)
+         end do
       end do
 
       !-------------------------------------------------------------------------
@@ -1033,9 +1062,10 @@ subroutine dropmixnuc( &
                dtmix, .false.)
 
             flxconv = raer_tend_cflx(mm)
+            surfrate = raer_surfrate(mm)
             call explmix( &! interstitial aerosol number
                raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
-               overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &
+               overlapm, raercol(:,mm,nsav), surfrate, flxconv, pver, &
                dtmix, .true., raercol_cw(:,mm,nsav))
 
             do l = 1, nspec_amode(m)
@@ -1055,9 +1085,10 @@ subroutine dropmixnuc( &
                   dtmix, .false.)
 
                flxconv = raer_tend_cflx(mm)
+               surfrate = raer_surfrate(mm)
                call explmix( &! interstitial aerosol mass
                   raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
-                  overlapm, raercol(:,mm,nsav), zero, flxconv, pver, &
+                  overlapm, raercol(:,mm,nsav), surfrate, flxconv, pver, &
                   dtmix, .true., raercol_cw(:,mm,nsav))
 
             end do

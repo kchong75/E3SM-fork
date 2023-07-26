@@ -2772,7 +2772,7 @@ end if
             ! Aerosol Activation
             !===================================================
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend)
+            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb)
             call t_stopf('microp_aero_run')
 
             call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
