@@ -297,8 +297,10 @@ end subroutine ndrop_init
 !===============================================================================
 
 subroutine dropmixnuc( &
-   state, ptend, dtmicro, pbuf, wsub, aero_cflx_tend_host, vlc_trb_host, &
+   state, ptend, dtmicro, pbuf, wsub, aero_cflx_tend_host, vlc_trb_host, aer_trb_flx_host, &
    cldn, cldo, tendnd, factnum)
+
+
 
    ! vertical diffusion and nucleation of cloud droplets
    ! assume cloud presence controlled by cloud fraction
@@ -324,8 +326,13 @@ subroutine dropmixnuc( &
                                                      ! POC Hui.Wan@pnnl.gov
 
    real(r8), intent(in) :: vlc_trb_host(:,:,:)   ! Turbulent dry deposition velocities of mass and number of different modes. 
+                                                 ! Expected shape: (pcols,4,ntot_amode)
 
    ! output arguments
+   real(r8), intent(out) :: aer_trb_flx_host(:,:)  ! surface deposition flux of interstitial aerosols
+                                                   ! caused by turbulent dry deposition [kg/m2/s] or [1/m2/s].
+                                                   ! Expected shape: (pcols,pcnst)
+
    real(r8), intent(out) :: tendnd(pcols,pver) ! change in droplet number concentration (#/kg/s)
    real(r8), intent(out) :: factnum(:,:,:)     ! activation fraction for aerosol number
    !--------------------Local storage-------------------------------------
@@ -414,8 +421,12 @@ subroutine dropmixnuc( &
    real(r8), allocatable :: raer_tend_cflx(:) ! single cell of aerosol mixing ratio tendencies corresponding to cam_in%clfx
                                               ! It is an array because there are multiple species.
 
+
    real(r8), allocatable :: raer_surfrate(:)  ! turbulent dry deposition velocity of interstitial aerosols divided by bottom layer thickness
                                               ! It is an array because there are multiple species.
+
+   real(r8), allocatable :: raer_surfrflx(:)  !
+                                              !
    integer :: imode, ispec, icnst
 
    real(r8) :: na(pcols), va(pcols), hy(pcols)
@@ -495,6 +506,7 @@ subroutine dropmixnuc( &
       qqcw(ncnst_tot),                &
       raer_tend_cflx(ncnst_tot),      &
       raer_surfrate(ncnst_tot),       &
+      raer_surfrflx(ncnst_tot),       &
       raercol(pver,ncnst_tot,2),      &
       raercol_cw(pver,ncnst_tot,2),   &
       coltend(pcols,ncnst_tot),       &
@@ -1017,6 +1029,8 @@ subroutine dropmixnuc( &
          nnew    = ntemp
          srcn(:) = 0.0_r8
 
+         raer_surfrflx(:) = 0._r8  ! for accumulating surface fluxes corresponding to surfrate
+
          do m = 1, ntot_amode
             mm = mam_idx(m,0)
 
@@ -1063,10 +1077,13 @@ subroutine dropmixnuc( &
 
             flxconv = raer_tend_cflx(mm)
             surfrate = raer_surfrate(mm)
+            raer_surfrflx(mm) = raer_surfrflx(mm) + surfrate*dz(i,pver)*raercol(pver,mm,nsav)*cs(i,pver)
+
             call explmix( &! interstitial aerosol number
                raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                overlapm, raercol(:,mm,nsav), surfrate, flxconv, pver, &
                dtmix, .true., raercol_cw(:,mm,nsav))
+
 
             do l = 1, nspec_amode(m)
                mm = mam_idx(m,l)
@@ -1086,6 +1103,8 @@ subroutine dropmixnuc( &
 
                flxconv = raer_tend_cflx(mm)
                surfrate = raer_surfrate(mm)
+               raer_surfrflx(mm) = raer_surfrflx(mm) + surfrate*dz(i,pver)*raercol(pver,mm,nsav)*cs(i,pver)
+
                call explmix( &! interstitial aerosol mass
                   raercol(:,mm,nnew), source, ekkp, ekkm, overlapp,  &
                   overlapm, raercol(:,mm,nsav), surfrate, flxconv, pver, &
@@ -1149,6 +1168,8 @@ subroutine dropmixnuc( &
                ptend%q(i,top_lev:pver,lptr) = raertend(top_lev:pver)           ! set tendencies for interstitial aerosol
                qqcw(mm)%fld(i,:) = 0.0_r8
                qqcw(mm)%fld(i,top_lev:pver) = max(raercol_cw(top_lev:pver,mm,nnew),0.0_r8) ! update cloud-borne aerosol; HW: ensure non-negative
+
+               aer_trb_flx_host(i,lptr) = raer_surfrflx(mm)/nsubmix   ! fluxes averaged over mixing substeps
             end do
          end do
 
@@ -1217,6 +1238,9 @@ subroutine dropmixnuc( &
       mact,       &
       raer,       &
       qqcw,       &
+      raer_tend_cflx, &
+      raer_surfrate,  &
+      raer_surfrflx,  &
       raercol,    &
       raercol_cw, &
       coltend,    &

@@ -1453,7 +1453,7 @@ subroutine tphysac (ztodt,   cam_in,               &
 
     real(r8),pointer :: aerdepdryis(:,:)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
     real(r8),pointer :: aerdepdrycw(:,:)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
-    real(r8),pointer :: vlc_grv(:,:,:,:)
+    real(r8),pointer :: vlc_grv(:,:,:,:)  ! grav setl velocity of interstitial and cloud-borne aerosols 
 
     real(r8) :: dt_fac_grav_setl
 
@@ -2234,8 +2234,8 @@ subroutine tphysbc (ztodt,                          &
 
     real(r8),pointer :: aerdepdryis(:,:)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
     real(r8),pointer :: aerdepdrycw(:,:)  ! surface deposition flux of cloud-borne  aerosols, [kg/m2/s] or [1/m2/s]
-    real(r8),pointer :: vlc_grv(:,:,:,:) ! grav setl velocity of aerosol particles
-    real(r8),pointer :: vlc_trb(:,:,:)   ! turb dry dep velocity of aerosol particles
+    real(r8),pointer :: vlc_grv(:,:,:,:)  ! grav settling velocity of aerosol particles. Shape: (pcols,pver,4,ntot_amode)
+    real(r8),pointer :: vlc_trb(:,:,:)    ! turb dry dep  velocity of aerosol particles. Shape: (pcols,     4,ntot_amode)
     real(r8) :: dt_fac_grav_setl
 
     real(r8) :: aerdepdryis_grv(pcols,pcnst)  ! surface deposition flux of interstitial aerosols, [kg/m2/s] or [1/m2/s]
@@ -2761,8 +2761,8 @@ end if
                                                ram1,  fricvel )! out
 
                call interstitial_aero_turb_dep_velocity(state, pbuf, ram1, fricvel, &! in
-                                                        vlc_grv(:,:,pver,:),        &! in 
-                                                        vlc_trb(:,:,     :)         )! inout
+                                                        vlc_grv(:,pver,:,:),        &! in 
+                                                        vlc_trb(:,     :,:)         )! inout
 
                call outfld( 'RAM1',     ram1(:), pcols, lchnk )
                call outfld( 'airFV', fricvel(:), pcols, lchnk )
@@ -2777,8 +2777,8 @@ end if
             ! in cam_in for the calculations of ram1 and fricvel, and hence cannot get
             ! proper values of vlc_trb even though vlc_grv could be calculated.)
 
-              vlc_grv(:,1:2,:,:) = 0._r8
-              vlc_trb(:,1:2,  :) = 0._r8
+              vlc_grv(:,:,1:2,:) = 0._r8
+              vlc_trb(:,  1:2,:) = 0._r8
 
             end if
 
@@ -2786,7 +2786,7 @@ end if
           ! Turbulent dry deposition of interstitial aerosols is treated separately
           ! from turbulent mixing. Send zeros to dropmixnuc.
 
-            vlc_trb(:,1:2,  :) = 0._r8
+            vlc_trb(:,1:2,:) = 0._r8
 
           end select
 
@@ -2798,7 +2798,7 @@ end if
             ! Aerosol Activation
             !===================================================
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb)
+            call microp_aero_run(state, ptend, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb, aerdepdryis_trb)
             call t_stopf('microp_aero_run')
 
             call physics_ptend_scale(ptend, 1._r8/cld_macmic_num_steps, ncol)
@@ -2909,7 +2909,7 @@ end if
           if (.not. micro_do_icesupersat) then 
 
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb)
+            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb, aerdepdryis_trb)
             call t_stopf('microp_aero_run')
 
           endif
@@ -2967,11 +2967,12 @@ end if
 
           call cnd_diag_checkpoint( diag, 'CLDMIC'//char_macmic_it, state, pbuf, cam_in, cam_out )
 
+        if (.not.is_first_step()) then
+
+          if ( (cflx_cpl_opt.eq.44) .and. (macmic_it==(cld_macmic_num_steps/2)) ) then
           !------------------------------------------------------------------------------
           ! Graviational settling of interstitial aerosols for a full ztodt
           !------------------------------------------------------------------------------
-          if (.not.is_first_step()) then
-          if ( (cflx_cpl_opt.eq.44) .and. (macmic_it==(cld_macmic_num_steps/2)) ) then
 
             dt_fac_grav_setl = 1._r8
             call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
@@ -2979,8 +2980,18 @@ end if
 
             aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
 
-          end if 
-          end if 
+          end if
+
+          select case (cflx_cpl_opt)
+          case(41,42,43,44)
+          !------------------------------------------------------------------------------
+          ! Accumulate turbulent dry dep fluxes of substeps 
+          !------------------------------------------------------------------------------
+            aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + aerdepdryis_trb(:ncol,:)/cld_macmic_num_steps
+
+          end select
+
+        end if 
           !----------
 
        end do ! end substepping over macrophysics/microphysics

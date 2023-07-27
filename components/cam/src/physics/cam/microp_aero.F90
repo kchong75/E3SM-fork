@@ -388,7 +388,7 @@ end subroutine microp_aero_readnl
 !=========================================================================================
 
 subroutine microp_aero_run ( &
-   state, ptend, deltatin, pbuf, liqcldfo, aero_cflx_tend, vlc_trb )
+   state, ptend, deltatin, pbuf, liqcldfo, aero_cflx_tend, vlc_trb, aerdepdryis_trb)
 
    ! input arguments
    type(physics_state), target, intent(in)    :: state
@@ -402,7 +402,11 @@ subroutine microp_aero_run ( &
                                                 ! These are all zeros unless cflx_cpl_opt = 4 or 40+
                                                 ! POC Hui.Wan@pnnl.gov
 
-   real(r8), intent(in) :: vlc_trb(:,:,:)  ! Turbulent dry deposition velocities of mass and number of different modes. 
+   real(r8), intent(in) :: vlc_trb(:,:,:)         ! Turbulent dry deposition velocities of mass and number of different modes. 
+                                                  ! Expected shape: (pcols,4,ntot_amode)
+   real(r8), intent(out) :: aerdepdryis_trb(:,:)  ! surface deposition flux of interstitial aerosols
+                                                  ! caused by turbulent dry deposition [kg/m2/s] or [1/m2/s]
+                                                  ! Expected shape: (pcols,pcnst)
 
    ! local workspace
    ! all units mks unless otherwise stated
@@ -740,7 +744,7 @@ subroutine microp_aero_run ( &
 
       call t_startf('dropmixnuc')
       call dropmixnuc( &
-         state, ptend, deltatin, pbuf, wsub, aero_cflx_tend, vlc_trb, &
+         state, ptend, deltatin, pbuf, wsub, aero_cflx_tend, vlc_trb, aerdepdryis_trb, &
          lcldn, lcldo, nctend_mixnuc, factnum)
       call t_stopf('dropmixnuc')
 
