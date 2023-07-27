@@ -2283,12 +2283,16 @@ subroutine tphysbc (ztodt,                          &
     select case (cflx_cpl_opt)
     case(41,42,43,44)
     ! Turb dry dep of interstitial aerosols is treated together with turb mixing.
-    !
+
       call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
-      call pbuf_get_field(pbuf, pbuf_get_index('AMODETBV'),    vlc_trb )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
     end select 
+
+    ! Always need to associate pointer vlc_trb, because it needs to be passed
+    ! to microp_aero_run and eventually to dropmixnuc.
+
+    call pbuf_get_field(pbuf, pbuf_get_index('AMODETBV'),    vlc_trb )
     !-----
 
     if (pergro_test_active) then 
@@ -2738,32 +2742,60 @@ end if
 
           call cnd_diag_checkpoint( diag, 'CFLX3_'//char_macmic_it, state, pbuf, cam_in, cam_out )
 
-          !--------------
-          select case (cflx_cpl_opt)
-          case(41,42,43,44)
-          ! Calculate turbulent dry dep velocities.
+          !-------------------------------------------
+          ! Set/calculate turbulent dry dep velocities.
+          !-------------------------------------------
           ! Considering that the velocities are functions of particle size and hence
           ! mass and mixing ratios, it would be more accurate if the velocities were
           ! recalculated every time the mixing ratios were updated, i.e., within the
           ! subcycles in dropmixnuc. However, 
           !  - the particle sizes used in the velocity calculation are the wet sizes
-          !    which (currently) are updated only once every "physics" time step; 
+          !    which, currently, are updated only once every "physics" time step; 
           !  - info in cam_in, which is used for calculating ram1 and fricvel, is
           !    updated only when the atmosphere exchanges info with the surface;
           !  - state%t does change more often, although probably not that much.
           ! Therefore we start with placing the velocity calculation here.
+          !---------------------------------------------------------------
+          select case (cflx_cpl_opt)
+          case(41,42,43,44)
 
-             call get_gridcell_ram1_fricvel( state, cam_in, &! in
-                                             ram1,  fricvel )! out
+            if (.not.is_first_step()) then
+            ! Calculate turbulent dry dep velocities.
+            ! Note that we need cam_in and vlc_grv as input.
 
-             call interstitial_aero_turb_dep_velocity(state, pbuf, ram1, fricvel, &! in
-                                                      vlc_grv(:,:,pver,:),        &! in 
-                                                      vlc_trb(:,:,     :)         )! inout
+               call get_gridcell_ram1_fricvel( state, cam_in, &! in
+                                               ram1,  fricvel )! out
 
-             call outfld( 'RAM1',     ram1(:), pcols, lchnk )
-             call outfld( 'airFV', fricvel(:), pcols, lchnk )
+               call interstitial_aero_turb_dep_velocity(state, pbuf, ram1, fricvel, &! in
+                                                        vlc_grv(:,:,pver,:),        &! in 
+                                                        vlc_trb(:,:,     :)         )! inout
 
-          end select 
+               call outfld( 'RAM1',     ram1(:), pcols, lchnk )
+               call outfld( 'airFV', fricvel(:), pcols, lchnk )
+
+            else
+            ! Since the wet sizes of lognormal modes have not been calculated yet,
+            ! we cannot yet calculate either the gravitational settling velocities
+            ! or the turbulent dry deposition velocities for interstitial aerosols.
+            ! Set both to zero. (Note: We could calculate water uptake here 
+            ! and then the gravitational settling velocities. However, since the coupling with
+            ! the Earth's surface has not been calculated, we do not have proper values
+            ! in cam_in for the calculations of ram1 and fricvel, and hence cannot get
+            ! proper values of vlc_trb even though vlc_grv could be calculated.)
+
+              vlc_grv(:,1:2,:,:) = 0._r8
+              vlc_trb(:,1:2,  :) = 0._r8
+
+            end if
+
+          case default
+          ! Turbulent dry deposition of interstitial aerosols is treated separately
+          ! from turbulent mixing. Send zeros to dropmixnuc.
+
+            vlc_trb(:,1:2,  :) = 0._r8
+
+          end select
+
           !---------------------------
 
           if (micro_do_icesupersat) then 
@@ -2883,7 +2915,7 @@ end if
           if (.not. micro_do_icesupersat) then 
 
             call t_startf('microp_aero_run')
-            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend)
+            call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo, aero_cflx_tend, vlc_trb)
             call t_stopf('microp_aero_run')
 
           endif
