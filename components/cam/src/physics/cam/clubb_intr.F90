@@ -2665,6 +2665,8 @@ end subroutine clubb_init_cnst
     ustar(pcols)  = 0.0_r8
 #ifdef CLUBB_SGS
 
+    call t_startf('clubb_surface')
+
     ! ----------------------- !
     ! Main Computation Begins !
     ! ----------------------- !
@@ -2701,6 +2703,8 @@ end subroutine clubb_init_cnst
  !  
  !  ptend%q(:ncol,:pver,:) = (ptend%q(:ncol,:pver,:) - state%q(:ncol,:pver,:)) * rztodt
     
+    call t_stopf('clubb_surface')
+
     return
 
 #endif

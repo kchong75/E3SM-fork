@@ -5,6 +5,7 @@ module modal_aero_drydep_utils
   use shr_kind_mod,   only: r8 => shr_kind_r8
   use ppgrid,         only: pcols, pver, pverp
   use physconst,      only: gravit, rair, pi, boltz
+  use perf_mod,       only: t_startf, t_stopf
 
   implicit none
   public
@@ -173,6 +174,7 @@ contains
 
      real(r8), parameter :: lndfrc_threshold = 0.000000001_r8  ! fraction, unitless
 
+     call t_startf('calcram')
      !---------------------------------------------------------------------------
      ! Friction velocity:
      !  - If the grid cell has a land fraction larger than a threshold (~zero),
@@ -251,6 +253,8 @@ contains
         endif  ! if grid cell has land fraction > threshold or not
 
      enddo ! loop over grid columns
+
+     call t_stopf('calcram')
 
   end subroutine calcram
 

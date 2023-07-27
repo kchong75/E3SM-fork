@@ -1690,7 +1690,6 @@ if (l_tracer_aero) then
     !===================================================
     ! Aerosol dry deposition processes
     !===================================================
-    call t_startf('aero_drydep')
 
     if ( cflx_cpl_opt <= 4 ) then
        !---------------------------------------------------------------
@@ -1698,8 +1697,11 @@ if (l_tracer_aero) then
        ! and interstitial aerosols,  using the old code
        !---------------------------------------------------------------
        if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
+
+       call t_startf('aero_drydep')
        call aero_model_drydep_old( state, pbuf, obklen, surfric, cam_in, ztodt, cam_out, ptend )
        call physics_update(state, ptend, ztodt, tend)
+       call t_stopf('aero_drydep')
 
     else
        !---------------------------------------------------------------
@@ -1715,9 +1717,6 @@ if (l_tracer_aero) then
        call get_gridcell_ram1_fricvel(state, cam_in, ram1, fricvel)
        call aero_model_drydep_cloudborne( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw )
 
-       call outfld( 'RAM1',     ram1(:), pcols, lchnk )
-       call outfld( 'airFV', fricvel(:), pcols, lchnk )
-
        !---------------------------------------------------------------
        ! Interstitial aerosols
        !---------------------------------------------------------------
@@ -1726,6 +1725,9 @@ if (l_tracer_aero) then
          !---------------------------------------------------------------
          ! Interstitial aerosols: both grav setl and turb dry dep
          !---------------------------------------------------------------
+         call outfld( 'RAM1',     ram1(:), pcols, lchnk )
+         call outfld( 'airFV', fricvel(:), pcols, lchnk )
+
          call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, ptend )
          call physics_update(state, ptend, ztodt, tend)
 
@@ -1768,7 +1770,6 @@ if (l_tracer_aero) then
        end select
 
     end if
-    call t_stopf('aero_drydep')
     call cnd_diag_checkpoint( diag, 'AERDRYRM', state, pbuf, cam_in, cam_out )
 
    !===================================================

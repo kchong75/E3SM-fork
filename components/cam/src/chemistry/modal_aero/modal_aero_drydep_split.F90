@@ -10,6 +10,7 @@ module modal_aero_drydep_split
   use shr_kind_mod,   only: r8 => shr_kind_r8
   use constituents,   only: pcnst
   use ppgrid,         only: pcols, pver, pverp
+  use perf_mod,       only: t_startf, t_stopf
 
   implicit none
   private
@@ -126,6 +127,8 @@ contains
     !---------------------------------------------------------------------------------------
     ! *** mean drop radius should eventually be computed from ndrop and qcldwtr
 
+    call t_startf('drydep_vel_cloudborne')
+
     rad_drop(:,:) = 5.0e-6_r8
     dens_drop(:,:) = rhoh2o
     sg_drop(:,:) = 1.46_r8
@@ -144,10 +147,14 @@ contains
                                  vlc_trb(:,  jvlc),                      &! out
                                  vlc_grv(:,:,jvlc)                       )! out
 
+    call t_stopf('drydep_vel_cloudborne')
+
     !----------------------------------------------------------------------------------
     ! Loop over all modes and all aerosol tracers (number + mass species).
     ! Calculate the drydep-induced tendencies, then update the mixing ratios.
     !----------------------------------------------------------------------------------
+    call t_startf('drydep_solve_cloudborne')
+
     do imode = 1, ntot_amode         ! loop over aerosol modes
     do lspec = 0, nspec_amode(imode) ! loop over number + constituents
 
@@ -177,6 +184,8 @@ contains
 
     enddo ! loop over number + constituents
     enddo ! imode = 1, ntot_amode
+
+    call t_stopf('drydep_solve_cloudborne')
 
   end subroutine aero_model_drydep_cloudborne
 
@@ -278,6 +287,8 @@ contains
        !  One set of velocities for number mixing ratio of the mode;
        !  One set of velocities for all mass mixing ratios of the mode.
        !-----------------------------------------------------------------
+       call t_startf('drydep_vel_interstitial')
+
         rad_aer(1:ncol,:) = 0.5_r8*dgncur_awet(1:ncol,:,imode) *exp(1.5_r8*(alnsg_amode(imode)**2))
        dens_aer(1:ncol,:) = wetdens(1:ncol,:,imode)
          sg_aer(1:ncol,:) = sigmag_amode(imode)
@@ -296,10 +307,13 @@ contains
                                     vlc_trb(:,  jvlc),                      &! out
                                     vlc_grv(:,:,jvlc)                       )! out
 
+       call t_stopf('drydep_vel_interstitial')
        !-----------------------------------------------------------
        ! Loop over number + mass species of the mode. 
        ! Calculate drydep-induced tendencies; save to ptend.
        !-----------------------------------------------------------
+       call t_startf('drydep_solve_interstitial')
+
        do lspec = 0, nspec_amode(imode)
 
           if (lspec == 0) then   ! number
@@ -328,6 +342,9 @@ contains
           call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
+
+       call t_stopf('drydep_solve_interstitial')
+
     enddo    ! imode = 1, ntot_amode
 
   end subroutine aero_model_drydep_interstitial
@@ -433,6 +450,8 @@ contains
        !  One set of velocities for number mixing ratio of the mode;
        !  One set of velocities for all mass mixing ratios of the mode.
        !-----------------------------------------------------------------
+       call t_startf('vlc_grv_interstitial')
+
         rad_aer(:ncol,:) = 0.5_r8*dgncur_awet(:ncol,:,imode) *exp(1.5_r8*(alnsg_amode(imode)**2))
        dens_aer(:ncol,:) = wetdens(:ncol,:,imode)
          sg_aer(:ncol,:) = sigmag_amode(imode)
@@ -455,10 +474,13 @@ contains
 
        vlc_grv_out(:ncol,:,jvlc,imode) = vlc_grv(:ncol,:,jvlc)
 
+       call t_stopf('vlc_grv_interstitial')
        !-----------------------------------------------------------
        ! Loop over number + mass species of the mode. 
        ! Calculate drydep-induced tendencies; save to ptend.
        !-----------------------------------------------------------
+       call t_startf('grav_setl_solve_interstitial')
+
        do lspec = 0, nspec_amode(imode)
 
           if (lspec == 0) then   ! number
@@ -480,6 +502,8 @@ contains
           call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
+
+       call t_stopf('grav_setl_solve_interstitial')
 
     enddo    ! imode = 1, ntot_amode
 
@@ -555,6 +579,8 @@ contains
     !  - one velocity for number mixing ratio of the mode;
     !  - one velocity for all mass mixing ratios of the mode.
     !-----------------------------------------------------------------
+    call t_startf('vlc_trb_interstitial')
+
     do imode = 1, ntot_amode   ! loop over aerosol modes
 
         rad_aer(1:ncol) = 0.5_r8*dgncur_awet(1:ncol,pver,imode) *exp(1.5_r8*(alnsg_amode(imode)**2))
@@ -580,6 +606,8 @@ contains
                                              vlc_dry(:)             )! out
 
     enddo ! imode = 1, ntot_amode
+
+    call t_stopf('vlc_trb_interstitial')
 
   end subroutine interstitial_aero_turb_dep_velocity
 
