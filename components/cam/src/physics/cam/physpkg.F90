@@ -1749,21 +1749,16 @@ if (l_tracer_aero) then
          call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
 
          ! Save surface flux of gravitational settling. (Turb. drydep flux is added later in tphysbc.)
-
          aerdepdryis(:ncol,:) = dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
 
-         call endrun ('TPHYSAC error: cflx_cpl_opt = 41 not fully implemented')
-
        case(42,44)
-         ! Nothing to do here other than initialize the accumulated dry dep flux of interstitial aerosols.
+         ! Nothing to do here other than initializing the accumulated dry dep flux of interstitial aerosols.
          ! (The accumulation is supposed to be done over an atm-sfc coupling timestep.)
          ! Full-time-step calculation of gravitational settling is
          ! done later after or during cloud mac-mic subcycles;
          ! Turbulent dry deposition is done together with dropmix nuc.
 
          aerdepdryis(:ncol,:) = 0._r8
-
-         call endrun ('TPHYSAC error: cflx_cpl_opt = 42, 44 not fully implemented')
 
        case default
          call endrun ('TPHYSAC error: unrecognized cflx_cpl_opt value')
@@ -2282,9 +2277,7 @@ subroutine tphysbc (ztodt,                          &
 
     !---------------------------
     select case (cflx_cpl_opt)
-    case(41,42,43,44)
-    ! Turb dry dep of interstitial aerosols is treated together with turb mixing.
-
+    case(41,42,43,44) ! Turb dry dep of interstitial aerosols is treated together with turb mixing.
       call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
       call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
@@ -2977,6 +2970,7 @@ end if
           !------------------------------------------------------------------------------
           ! Graviational settling of interstitial aerosols for a full ztodt
           !------------------------------------------------------------------------------
+          if (.not.is_first_step()) then
           if ( (cflx_cpl_opt.eq.44) .and. (macmic_it==(cld_macmic_num_steps/2)) ) then
 
             dt_fac_grav_setl = 1._r8
@@ -2985,6 +2979,7 @@ end if
 
             aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
 
+          end if 
           end if 
           !----------
 
@@ -3021,18 +3016,22 @@ end if
      !------------------------------------------------------------------------------
      ! Graviational settling of interstitial aerosols for a full ztodt or half ztodt
 
-     select case (cflx_cpl_opt)
-     case(42,43)
-       if (cflx_cpl_opt==42) dt_fac_grav_setl = 1._r8
-       if (cflx_cpl_opt==43) dt_fac_grav_setl = .5_r8
+     if (.not.is_first_step()) then
 
-       call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
-       call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
+        select case (cflx_cpl_opt)
+        case(42,43)
+          if (cflx_cpl_opt==42) dt_fac_grav_setl = 1._r8
+          if (cflx_cpl_opt==43) dt_fac_grav_setl = .5_r8
 
-       ! Add surface flux of gravitational settling to the total flux of interstitial aerosols
-       aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
+          call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
+          call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
 
-     end select
+          ! Add surface flux of gravitational settling to the total flux of interstitial aerosols
+          aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + dt_fac_grav_setl * aerdepdryis_grv(:ncol,:)
+
+        end select
+
+     end if
 
      select case (cflx_cpl_opt)
      case(41,42,43,44)
@@ -3041,6 +3040,10 @@ end if
        ! copy the fluxes calculated here to cam_out to be passed to other 
        ! components of the Earth System Model.
        if (.not.aerodep_flx_prescribed()) then
+          if (is_first_step()) then
+             aerdepdryis = 0._r8
+             aerdepdrycw = 0._r8
+          end if
           call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
        endif
      end select
