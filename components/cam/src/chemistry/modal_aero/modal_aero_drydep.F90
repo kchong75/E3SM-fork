@@ -104,6 +104,7 @@ contains
     real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
     real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
 
+    character(len=3) :: str
     !---------------------------------------------------------------------------
     ! Retrieve input variables; initialize output (i.e., ptend).
     !---------------------------------------------------------------------------
@@ -242,9 +243,15 @@ contains
                                           ptend%q(:,:,icnst)                   )! in
 
           call outfld( trim(cnst_name(icnst))//'DDV', vlc_dry(:ncol,:,jvlc), pcols, lchnk )
-          call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
+
+       write(str,'(i0)') imode
+       call outfld( 'num_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,1), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,2), pcols, lchnk )
+       call outfld( 'num_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,  1), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,  2), pcols, lchnk )
+
     enddo    ! imode = 1, ntot_amode
 
   end subroutine aero_model_drydep

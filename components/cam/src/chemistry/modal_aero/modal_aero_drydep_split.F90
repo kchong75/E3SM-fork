@@ -11,6 +11,7 @@ module modal_aero_drydep_split
   use constituents,   only: pcnst
   use ppgrid,         only: pcols, pver, pverp
   use perf_mod,       only: t_startf, t_stopf
+  use cam_history,    only: outfld
 
   implicit none
   private
@@ -192,7 +193,6 @@ contains
   !------------------------------------------------------------
   subroutine aero_model_drydep_interstitial  ( state, pbuf, ram1, fricvel, dt, aerdepdryis, ptend )
 
-    use cam_history,             only: outfld
     use physics_buffer,          only: physics_buffer_desc, pbuf_get_field
     use physics_types,           only: physics_state, physics_ptend, physics_ptend_init
 
@@ -255,6 +255,7 @@ contains
     real(r8)::  vlc_trb(pcols,4)          ! dep velocity of turbulent dry deposition [m/s]
     real(r8) :: vlc_dry(pcols,pver,4)     ! dep velocity, sum of vlc_grv and vlc_trb [m/s]
 
+    character(len=3) :: str
     !--------------------------
     ! Retrieve input variables
     !--------------------------
@@ -338,10 +339,18 @@ contains
                                           vlc_grv(:,:,jvlc), sflx,             &! in
                                           ptend%q(:,:,icnst)                   )! in
 
-          call outfld( trim(cnst_name(icnst))//'DDV', vlc_dry(:ncol,:,jvlc), pcols, lchnk )
-          call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'DDV', vlc_dry(:,:,jvlc), pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
+
+       !---------------------------------
+       ! Write out deposition velocities
+       !---------------------------------
+       write(str,'(i0)') imode
+       call outfld( 'num_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,1), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,2), pcols, lchnk )
+       call outfld( 'num_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,  1), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,  2), pcols, lchnk )
 
        call t_stopf('drydep_solve_interstitial')
 
@@ -418,6 +427,7 @@ contains
 
     real(r8), pointer :: qq(:,:)            ! mixing ratio of a single tracer [kg/kg] or [1/kg]
 
+    character(len=3) :: str
     !--------------------------
     ! Retrieve input variables
     !--------------------------
@@ -498,10 +508,16 @@ contains
           ptend%lq(icnst) = .true.
           ptend%q(:ncol,:,icnst) = dqdt_tmp(:ncol,:)
 
-          call outfld( trim(cnst_name(icnst))//'GVF',    sflx(:ncol),        pcols, lchnk )
-          call outfld( trim(cnst_name(icnst))//'GVV', vlc_grv(:ncol,:,jvlc), pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'GVF',    sflx(:),        pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
+
+       !-------------------------------
+       ! Write out settling velocities
+       !-------------------------------
+       write(str,'(i0)') imode
+       call outfld( 'num_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,1), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_GVV', vlc_grv(:,:,2), pcols, lchnk )
 
        call t_stopf('grav_setl_solve_interstitial')
 
@@ -562,6 +578,8 @@ contains
     integer :: imnt    ! moment of the aerosol size distribution. 0 = number; 3 = volume
     integer :: jvlc    ! index for last dimension of vlc_xxx arrays
 
+    character(len=3) :: str
+
     lchnk = state%lchnk
     ncol  = state%ncol
 
@@ -604,6 +622,13 @@ contains
                                              vlc_grv(:,jvlc,imode), &! in
                                              vlc_trb(:,jvlc,imode), &! out
                                              vlc_dry(:)             )! out
+
+       !-------------------------------
+       ! Write out settling velocities
+       !-------------------------------
+       write(str,'(i0)') imode
+       call outfld( 'num_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,1,imode), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,2,imode), pcols, lchnk )
 
     enddo ! imode = 1, ntot_amode
 

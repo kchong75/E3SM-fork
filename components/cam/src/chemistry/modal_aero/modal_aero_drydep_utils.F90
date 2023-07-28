@@ -11,7 +11,35 @@ module modal_aero_drydep_utils
   public
 
 contains
-  
+
+  subroutine outfld_aero_cnst_2d( fld, suffix, lchnk )
+
+  use modal_aero_data,         only: ntot_amode, nspec_amode
+  use constituents,            only: cnst_name
+  use modal_aero_data,         only: numptr_amode, lmassptr_amode
+  use cam_history,             only: outfld
+ 
+  real(r8),        intent(in) :: fld(:,:)
+  character(len=*),intent(in) :: suffix
+  integer,         intent(in) :: lchnk
+
+  integer :: imode, lspec, icnst
+
+  do imode=1,ntot_amode
+     do lspec = 0, nspec_amode(imode)
+
+        if (lspec == 0) then   ! number
+           icnst = numptr_amode(imode)
+        else ! aerosol mass
+           icnst = lmassptr_amode(lspec,imode)
+        endif
+
+     end do
+
+     call outfld( trim(cnst_name(icnst))//trim(suffix), fld(:,icnst), pcols, lchnk)
+  end do
+
+  end subroutine outfld_aero_cnst_2d  
   !-----------------------------------------------------------------------
   ! Numerically solve the sedimentation equation for 1 tracer
   !-----------------------------------------------------------------------

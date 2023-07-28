@@ -2035,7 +2035,7 @@ subroutine tphysbc (ztodt,                          &
     use sfc_cpl_opt,             only: cflx_tend
     use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
     use modal_aero_drydep_split, only: interstitial_aero_turb_dep_velocity
-    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel
+    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel, outfld_aero_cnst_2d
     use aerodep_flx,             only: aerodep_flx_prescribed
     use modal_aero_deposition,   only: set_srf_drydep
 
@@ -2989,6 +2989,7 @@ end if
           !------------------------------------------------------------------------------
             aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + aerdepdryis_trb(:ncol,:)/cld_macmic_num_steps
 
+            call outfld_aero_cnst_2d( aerdepdryis_trb, 'TBF', lchnk )
           end select
 
         end if 
@@ -3057,6 +3058,8 @@ end if
           end if
           call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
        endif
+
+       call outfld_aero_cnst_2d( aerdepdryis, 'DDF', lchnk )
      end select
      !------------------------------------------------------------------------------
 

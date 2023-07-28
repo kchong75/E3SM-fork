@@ -212,6 +212,8 @@ contains
     character(len=6) :: test_name
     character(len=100) :: errmes
     character(len=2)  :: unit_basename  ! Units 'kg' or '1' 
+    character(len=3)  :: str
+    integer :: imode
 
     if ( masterproc ) write(iulog,'(a,i5)') 'aero_model_init iflagaa=', iflagaa ! REASTER 08/04/2015
 
@@ -532,8 +534,6 @@ contains
        call addfld (trim(drydep_list(m))//'DDV',(/ 'lev' /), 'A','m/s', &
             trim(drydep_list(m))//' deposition velocity')
 
-       call addfld (trim(drydep_list(m))//'GVV',(/ 'lev' /), 'A','m/s', trim(drydep_list(m))//' gravitational deposition velocity')
-
        if ( history_aerosol ) then 
           call add_default (trim(drydep_list(m))//'DDF', 1, ' ')
           if ( history_verbose ) then
@@ -543,6 +543,14 @@ contains
        endif
 
     enddo
+
+    do imode=1,ntot_amode
+       write(str,'(i0)') imode
+       call addfld ('num_a'//trim(adjustl(str))//'_GVV',(/'lev'/), 'A','m/s', 'num_a'//trim(adjustl(str))//' gravitational deposition velocity')
+       call addfld ('mss_a'//trim(adjustl(str))//'_GVV',(/'lev'/), 'A','m/s', 'mss_a'//trim(adjustl(str))//' gravitational deposition velocity')
+       call addfld ('num_a'//trim(adjustl(str))//'_TBV',horiz_only,'A','m/s', 'num_a'//trim(adjustl(str))//' turbulent dry deposition velocity')
+       call addfld ('mss_a'//trim(adjustl(str))//'_TBV',horiz_only,'A','m/s', 'mss_a'//trim(adjustl(str))//' turbulent dry deposition velocity')
+    end do
 
     do m = 1,nwetdep
        if ( masterproc ) write(iulog,'(a,i3,2x,a)') 'm, wetdep_list', m, trim(wetdep_list(m)) ! REASTER 08/04/2015
