@@ -1336,8 +1336,7 @@ subroutine explmix( q, src, ekkp, ekkm, overlapp, overlapm, &
    !-------------------------
    ! Force to non-negative
    !-------------------------
-   ! if (q(pver)<-1.e-30)then
-   !    write(iulog,*)'q=',q(pver),' in explmix'
+   if (q(pver)<-1.e-30) write(iulog,*)'q(pver) negative? =',q(pver),' in explmix'
 
    q(pver) = max(q(pver),0._r8)
 

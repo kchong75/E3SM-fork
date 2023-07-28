@@ -544,13 +544,23 @@ contains
 
     enddo
 
+    !---------
     do imode=1,ntot_amode
+
        write(str,'(i0)') imode
        call addfld ('num_a'//trim(adjustl(str))//'_GVV',(/'lev'/), 'A','m/s', 'num_a'//trim(adjustl(str))//' gravitational deposition velocity')
        call addfld ('mss_a'//trim(adjustl(str))//'_GVV',(/'lev'/), 'A','m/s', 'mss_a'//trim(adjustl(str))//' gravitational deposition velocity')
        call addfld ('num_a'//trim(adjustl(str))//'_TBV',horiz_only,'A','m/s', 'num_a'//trim(adjustl(str))//' turbulent dry deposition velocity')
        call addfld ('mss_a'//trim(adjustl(str))//'_TBV',horiz_only,'A','m/s', 'mss_a'//trim(adjustl(str))//' turbulent dry deposition velocity')
+
+       if ( history_aerosol .and. history_verbose ) then
+          call add_default('num_a'//trim(adjustl(str))//'_GVV', 1, ' ')
+          call add_default('mss_a'//trim(adjustl(str))//'_GVV', 1, ' ')
+          call add_default('num_a'//trim(adjustl(str))//'_TBV', 1, ' ')
+          call add_default('mss_a'//trim(adjustl(str))//'_TBV', 1, ' ')
+       endif
     end do
+    !---------
 
     do m = 1,nwetdep
        if ( masterproc ) write(iulog,'(a,i3,2x,a)') 'm, wetdep_list', m, trim(wetdep_list(m)) ! REASTER 08/04/2015
