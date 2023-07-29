@@ -1765,7 +1765,7 @@ if (l_tracer_aero) then
        end select
 
     end if
-    call cnd_diag_checkpoint( diag, 'AERDRYRM', state, pbuf, cam_in, cam_out )
+    call cnd_diag_checkpoint( diag, 'AERDRYRM1', state, pbuf, cam_in, cam_out )
 
    !===================================================
    ! CARMA microphysics
@@ -2993,6 +2993,7 @@ end if
           end select
 
         end if 
+          call cnd_diag_checkpoint( diag, 'AERDRYRM2_'//char_macmic_it, state, pbuf, cam_in, cam_out )
           !----------
 
        end do ! end substepping over macrophysics/microphysics
@@ -3062,6 +3063,7 @@ end if
        call outfld_aero_cnst_2d( aerdepdryis, 'DDF', lchnk )
      end select
      !------------------------------------------------------------------------------
+     call cnd_diag_checkpoint( diag, 'AERDRYRM3', state, pbuf, cam_in, cam_out )
 
 if (l_tracer_aero) then
 
