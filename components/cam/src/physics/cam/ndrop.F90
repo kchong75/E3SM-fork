@@ -1020,7 +1020,10 @@ subroutine dropmixnuc( &
       end do
 
 
-      ! old_cloud_nsubmix_loop
+      ! old_cloud_nsubmix_loop =====================================================================
+
+      raer_surfrflx(:) = 0._r8  ! for accumulating surface fluxes corresponding to surfrate
+
       do n = 1, nsubmix
          qncld(:) = qcld(:)
          ! switch nsav, nnew so that nsav is the updated aerosol
@@ -1029,7 +1032,6 @@ subroutine dropmixnuc( &
          nnew    = ntemp
          srcn(:) = 0.0_r8
 
-         raer_surfrflx(:) = 0._r8  ! for accumulating surface fluxes corresponding to surfrate
 
          do m = 1, ntot_amode
             mm = mam_idx(m,0)
@@ -1110,10 +1112,10 @@ subroutine dropmixnuc( &
                   overlapm, raercol(:,mm,nsav), surfrate, flxconv, pver, &
                   dtmix, .true., raercol_cw(:,mm,nsav))
 
-            end do
-         end do
+            end do ! l = 1, nspec_amode(m)
+         end do    ! m = 1, ntot_amode
 
-      end do ! old_cloud_nsubmix_loop
+      end do ! old_cloud_nsubmix_loop: n = 1, nsubmix ==================================
 
       ! evaporate particles again if no cloud
 
@@ -1161,7 +1163,7 @@ subroutine dropmixnuc( &
                raertend(top_lev:pver) = (raercol(top_lev:pver,mm,nnew) - raer(mm)%fld(i,top_lev:pver))*dtinv
                qqcwtend(top_lev:pver) = (raercol_cw(top_lev:pver,mm,nnew) - qqcw(mm)%fld(i,top_lev:pver))*dtinv
 
-               coltend(i,mm)    = sum( pdel(i,:)*raertend )/gravit
+               coltend(i,mm)    = sum( pdel(i,:)*raertend )/gravit - raer_tend_cflx(mm)*pdel(i,pver)/gravit + raer_surfrflx(mm)/nsubmix
                coltend_cw(i,mm) = sum( pdel(i,:)*qqcwtend )/gravit
 
                ptend%q(i,:,lptr) = 0.0_r8
