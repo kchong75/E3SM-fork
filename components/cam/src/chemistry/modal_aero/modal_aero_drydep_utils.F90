@@ -26,17 +26,17 @@ contains
   integer :: imode, lspec, icnst
 
   do imode=1,ntot_amode
-     do lspec = 0, nspec_amode(imode)
+  do lspec = 0, nspec_amode(imode)
 
-        if (lspec == 0) then   ! number
-           icnst = numptr_amode(imode)
-        else ! aerosol mass
-           icnst = lmassptr_amode(lspec,imode)
-        endif
-
-     end do
+     if (lspec == 0) then   ! number
+        icnst = numptr_amode(imode)
+     else ! aerosol mass
+        icnst = lmassptr_amode(lspec,imode)
+     endif
 
      call outfld( trim(cnst_name(icnst))//trim(suffix), fld(:,icnst), pcols, lchnk)
+
+  end do
   end do
 
   end subroutine outfld_aero_cnst_2d  
