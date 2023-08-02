@@ -357,7 +357,7 @@ subroutine dropmixnuc( &
    real(r8) :: qqcwtend(pver)  ! tendency of cloudborne aerosol mass, number mixing ratios
 
    real(r8) :: aer_trb_tnd_host(pcols,pcnst) ! turb. dry dep. tendencies averaged over mixing substeps
-
+   real(r8) :: aer_mnu_tnd_host(pcols,pver,pcnst) ! tendencies of turb. mixing + act./resus. averaged over mixing substeps
 
    real(r8), parameter :: zkmin = 0.01_r8, zkmax = 100._r8
    real(r8), parameter :: wmixmin = 0.1_r8        ! minimum turbulence vertical velocity (m/s)
@@ -1175,6 +1175,14 @@ subroutine dropmixnuc( &
 
                aer_trb_flx_host(i,lptr) =  raer_surfrflx(mm)/nsubmix                       ! turb. dry dep. fluxes averaged over mixing substeps
                aer_trb_tnd_host(i,lptr) = -raer_surfrflx(mm)/nsubmix*gravit/pdel(i,pver)   ! turb. dry dep. tendencies corresponding to the averaged fluxes
+
+               ! Save for output the interstitial aerosol tendencies caused by turb. mixing and activation-resuspension.
+               ! In the lowest model layer, we need to subtract the tendencies caused by surface emissions and turbulent
+               ! dry deposition.
+               !
+               aer_mnu_tnd_host(i,:,             lptr) = 0._r8
+               aer_mnu_tnd_host(i,top_lev:pver-1,lptr) = raertend(top_lev:pver-1)
+               aer_mnu_tnd_host(i,        pver,  lptr) = raertend(pver) - raer_tend_cflx(mm) - aer_trb_tnd_host(i,lptr)
             end do
          end do
 
@@ -1191,8 +1199,9 @@ subroutine dropmixnuc( &
    do m = 1, ntot_amode
    do l = 0, nspec_amode(m)
       lptr = mam_cnst_idx(m,l)
-      call outfld(trim(cnst_name(lptr))//'DTQMX_TB', aer_trb_tnd_host(:,lptr), pcols, lchnk)
+      call outfld(trim(cnst_name(lptr))//'DTQMX_TB',    aer_trb_tnd_host(:,lptr), pcols, lchnk)
       call outfld(trim(cnst_name(lptr))//'DTQMX_SF', aero_cflx_tend_host(:,lptr), pcols, lchnk)
+      call outfld(trim(cnst_name(lptr))//'DTQMX_MN',  aer_mnu_tnd_host(:,:,lptr), pcols, lchnk)
    end do
    end do
 

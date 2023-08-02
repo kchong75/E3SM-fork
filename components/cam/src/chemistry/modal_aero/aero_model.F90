@@ -543,6 +543,9 @@ contains
        call addfld (trim(drydep_list(m))//'DTQMX_SF',horiz_only, 'A',unit_basename//'/kg/s ', &
                     trim(drydep_list(m))//' tendency due to surface emission included in mixnuc solver')
 
+       call addfld (trim(drydep_list(m))//'DTQMX_MN',(/'lev'/),  'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' tendency due to turbulent mixing and activation-resuspension')
+
        if ( history_aerosol ) then 
           call add_default (trim(drydep_list(m))//'DDF', 1, ' ')
           if ( history_verbose ) then
@@ -551,6 +554,7 @@ contains
              call add_default (trim(drydep_list(m))//'DTQ_TB',  1, ' ')
              call add_default (trim(drydep_list(m))//'DTQMX_TB',1, ' ')
              call add_default (trim(drydep_list(m))//'DTQMX_SF',1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQMX_MN',1, ' ')
           endif
        endif
 
