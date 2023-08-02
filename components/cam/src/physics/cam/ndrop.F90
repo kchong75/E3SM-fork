@@ -15,7 +15,7 @@ use spmd_utils,       only: masterproc
 use ppgrid,           only: pcols, pver, pverp
 use physconst,        only: pi, rhoh2o, mwh2o, r_universal, rh2o, &
                             gravit, latvap, cpair, rair
-use constituents,     only: pcnst, cnst_get_ind
+use constituents,     only: pcnst, cnst_get_ind, cnst_name
 use physics_types,    only: physics_state, physics_ptend, physics_ptend_init
 use physics_buffer,   only: physics_buffer_desc, pbuf_get_index, pbuf_get_field
 
@@ -355,6 +355,8 @@ subroutine dropmixnuc( &
    type(ptr2d_t), allocatable :: qqcw(:)
    real(r8) :: raertend(pver)  ! tendency of aerosol mass, number mixing ratios
    real(r8) :: qqcwtend(pver)  ! tendency of cloudborne aerosol mass, number mixing ratios
+
+   real(r8) :: aer_trb_tnd_host(pcols,pcnst)
 
 
    real(r8), parameter :: zkmin = 0.01_r8, zkmax = 100._r8
@@ -1171,7 +1173,8 @@ subroutine dropmixnuc( &
                qqcw(mm)%fld(i,:) = 0.0_r8
                qqcw(mm)%fld(i,top_lev:pver) = max(raercol_cw(top_lev:pver,mm,nnew),0.0_r8) ! update cloud-borne aerosol; HW: ensure non-negative
 
-               aer_trb_flx_host(i,lptr) = raer_surfrflx(mm)/nsubmix   ! fluxes averaged over mixing substeps
+               aer_trb_flx_host(i,lptr) =  raer_surfrflx(mm)/nsubmix                       ! fluxes averaged over mixing substeps
+               aer_trb_tnd_host(i,lptr) = -raer_surfrflx(mm)/nsubmix*gravit/pdel(i,pver)   ! tendencies corresponding to the averaged fluxes 
             end do
          end do
 
