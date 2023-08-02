@@ -356,7 +356,7 @@ subroutine dropmixnuc( &
    real(r8) :: raertend(pver)  ! tendency of aerosol mass, number mixing ratios
    real(r8) :: qqcwtend(pver)  ! tendency of cloudborne aerosol mass, number mixing ratios
 
-   real(r8) :: aer_trb_tnd_host(pcols,pcnst)
+   real(r8) :: aer_trb_tnd_host(pcols,pcnst) ! turb. dry dep. tendencies averaged over mixing substeps
 
 
    real(r8), parameter :: zkmin = 0.01_r8, zkmax = 100._r8
@@ -1173,8 +1173,8 @@ subroutine dropmixnuc( &
                qqcw(mm)%fld(i,:) = 0.0_r8
                qqcw(mm)%fld(i,top_lev:pver) = max(raercol_cw(top_lev:pver,mm,nnew),0.0_r8) ! update cloud-borne aerosol; HW: ensure non-negative
 
-               aer_trb_flx_host(i,lptr) =  raer_surfrflx(mm)/nsubmix                       ! fluxes averaged over mixing substeps
-               aer_trb_tnd_host(i,lptr) = -raer_surfrflx(mm)/nsubmix*gravit/pdel(i,pver)   ! tendencies corresponding to the averaged fluxes 
+               aer_trb_flx_host(i,lptr) =  raer_surfrflx(mm)/nsubmix                       ! turb. dry dep. fluxes averaged over mixing substeps
+               aer_trb_tnd_host(i,lptr) = -raer_surfrflx(mm)/nsubmix*gravit/pdel(i,pver)   ! turb. dry dep. tendencies corresponding to the averaged fluxes
             end do
          end do
 
@@ -1187,6 +1187,14 @@ subroutine dropmixnuc( &
    call outfld('NDROPSRC', nsource,  pcols, lchnk)
    call outfld('NDROPMIX', ndropmix, pcols, lchnk)
    call outfld('WTKE    ', wtke,     pcols, lchnk)
+
+   do m = 1, ntot_amode
+   do l = 0, nspec_amode(m)
+      lptr = mam_cnst_idx(m,l)
+      call outfld(trim(cnst_name(lptr))//'DTQMX_TB', aer_trb_tnd_host(:,lptr), pcols, lchnk)
+    ! call outfld(trim(cnst_name(lptr))//'DTQMX_SF', aero_cflx_tend_host(:,lptr), pcols, lchnk)
+   end do
+   end do
 
    call ccncalc(state, pbuf, cs, ccn)
    do l = 1, psat
