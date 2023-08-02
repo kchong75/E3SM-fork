@@ -534,11 +534,23 @@ contains
        call addfld (trim(drydep_list(m))//'DDV',(/ 'lev' /), 'A','m/s', &
             trim(drydep_list(m))//' deposition velocity')
 
+       call addfld (trim(drydep_list(m))//'DTQ_TB',horiz_only, 'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' tendency due to turbulent dry deposition included alongside grav setl')
+
+       call addfld (trim(drydep_list(m))//'DTQMX_TB',horiz_only, 'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' tendency due to turbulent dry deposition included in mixnuc solver')
+
+       call addfld (trim(drydep_list(m))//'DTQMX_SF',horiz_only, 'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' tendency due to surface emission included in mixnuc solver')
+
        if ( history_aerosol ) then 
           call add_default (trim(drydep_list(m))//'DDF', 1, ' ')
           if ( history_verbose ) then
              call add_default (trim(drydep_list(m))//'TBF', 1, ' ')
              call add_default (trim(drydep_list(m))//'GVF', 1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQ_TB',  1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQMX_TB',1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQMX_SF',1, ' ')
           endif
        endif
 
