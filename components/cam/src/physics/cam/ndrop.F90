@@ -1192,7 +1192,7 @@ subroutine dropmixnuc( &
    do l = 0, nspec_amode(m)
       lptr = mam_cnst_idx(m,l)
       call outfld(trim(cnst_name(lptr))//'DTQMX_TB', aer_trb_tnd_host(:,lptr), pcols, lchnk)
-    ! call outfld(trim(cnst_name(lptr))//'DTQMX_SF', aero_cflx_tend_host(:,lptr), pcols, lchnk)
+      call outfld(trim(cnst_name(lptr))//'DTQMX_SF', aero_cflx_tend_host(:,lptr), pcols, lchnk)
    end do
    end do
 
