@@ -214,6 +214,7 @@ contains
     character(len=2)  :: unit_basename  ! Units 'kg' or '1' 
     character(len=3)  :: str
     integer :: imode
+    integer :: icnst
 
     if ( masterproc ) write(iulog,'(a,i5)') 'aero_model_init iflagaa=', iflagaa ! REASTER 08/04/2015
 
@@ -563,6 +564,17 @@ contains
        endif
 
     enddo
+
+
+    !---------
+    do icnst=2,pcnst
+
+       call addfld (trim(cnst_name(icnst))//'DTQ_SF',horiz_only, 'A','kg/kg/s or 1/kg/s', &
+                    trim(cnst_name(icnst))//' tendency due to surface emissions, calculated in cflx_tend')
+
+       if ( history_aerosol.and.history_verbose ) &
+       call add_default(trim(cnst_name(icnst))//'DTQ_SF',  1, ' ')
+    end do
 
     !---------
     do imode=1,ntot_amode

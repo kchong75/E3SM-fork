@@ -3,7 +3,8 @@ module sfc_cpl_opt
   use shr_kind_mod,  only: r8=>shr_kind_r8
   use physconst,     only: gravit
   use ppgrid,        only: pcols, pver
-  use constituents,  only: pcnst
+  use constituents,  only: pcnst, cnst_name
+  use cam_history,   only: outfld
 
   implicit none
   public
@@ -27,14 +28,14 @@ contains
     real(r8), intent(out), optional     :: aero_cflx_tend(pcols,pcnst)
 
     logical  :: lq(pcnst)
-    integer  :: ncol, m
-   !real(r8) :: tmp1(pcols)
+    integer  :: ncol, m, lchnk
 
     logical  :: prog_modal_aero
     integer  :: imode, ispec, icnst
     integer  :: nmodes,nspec
 
     ncol = state%ncol
+    lchnk = state%lchnk
 
    !----------
    !lq(:) = .TRUE.
@@ -57,6 +58,7 @@ contains
     
     do m = 2, pcnst
        ptend%q(:ncol,pver,m) = gravit * state%rpdel(:ncol,pver)* cam_in%cflx(:ncol,m)
+       call outfld( trim(cnst_name(m))//'DTQ_SF',ptend%q(:,pver,m),pcols,lchnk)
     enddo
     !----------
 
