@@ -561,6 +561,7 @@ contains
           if ( history_verbose ) then
              call add_default (trim(drydep_list(m))//'TBF', 1, ' ')
              call add_default (trim(drydep_list(m))//'GVF', 1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQ',     1, ' ') ! dq/dt_{turb-dep}
              call add_default (trim(drydep_list(m))//'DTQ_TB',  1, ' ') ! dq/dt_{turb-dep}
              call add_default (trim(drydep_list(m))//'DTQ_GV',  1, ' ') ! dq/dt_{grav-setl}
              call add_default (trim(drydep_list(m))//'DTQMX_TB',1, ' ') ! dq/dt_{turb-dep} in dropmixnuc

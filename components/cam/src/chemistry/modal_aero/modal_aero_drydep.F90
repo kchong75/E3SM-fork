@@ -281,7 +281,7 @@ contains
     real(r8) :: dep_trb(pcols)       ! turbulent dry deposition portion of sflx [kg/m2/s] or [1/m2/s]
     real(r8) :: dep_grv(pcols)       ! gravitational settling   portion of slfx [kg/m2/s] or [1/m2/s]
     real(r8) :: tnd_trb(pcols)       ! diagnosed tendency corresponding to dep_trb [kg/kg/s] or [1/kg/s]
-    real(r8) :: tnd_grv(pver,pcols)  ! diagnosed tendency corresponding to dep_trb [kg/kg/s] or [1/kg/s]
+    real(r8) :: tnd_grv(pcols,pver)  ! diagnosed tendency corresponding to dep_trb [kg/kg/s] or [1/kg/s]
     integer :: ii
 
     !----------
