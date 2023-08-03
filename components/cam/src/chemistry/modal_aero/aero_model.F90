@@ -515,6 +515,11 @@ contains
     rate1_cw2pr_st_idx  = pbuf_get_index('RATE1_CW2PR_ST') 
     call pbuf_set_field(pbuf2d, rate1_cw2pr_st_idx, 0.0_r8)
 
+    !===============================================
+    ! For dry depoistion and related processes
+    !===============================================
+    ! Deposition fluxes and tendencies
+
     do m = 1,ndrydep
        
        ! units 
@@ -556,17 +561,20 @@ contains
           if ( history_verbose ) then
              call add_default (trim(drydep_list(m))//'TBF', 1, ' ')
              call add_default (trim(drydep_list(m))//'GVF', 1, ' ')
-             call add_default (trim(drydep_list(m))//'DTQ_TB',  1, ' ')
-             call add_default (trim(drydep_list(m))//'DTQMX_TB',1, ' ')
-             call add_default (trim(drydep_list(m))//'DTQMX_SF',1, ' ')
-             call add_default (trim(drydep_list(m))//'DTQMX_MN',1, ' ')
+             call add_default (trim(drydep_list(m))//'DTQ_TB',  1, ' ') ! dq/dt_{turb-dep}
+             call add_default (trim(drydep_list(m))//'DTQ_GV',  1, ' ') ! dq/dt_{grav-setl}
+             call add_default (trim(drydep_list(m))//'DTQMX_TB',1, ' ') ! dq/dt_{turb-dep} in dropmixnuc
+             call add_default (trim(drydep_list(m))//'DTQMX_SF',1, ' ') ! dq/dt_{cflx}     in dropmixnuc
+             call add_default (trim(drydep_list(m))//'DTQMX_MN',1, ' ') ! dq/dt_{mixnuc}   in dropmixnuc
           endif
        endif
 
     enddo
 
 
-    !---------
+    !-------------------------------------------------------------
+    ! Mixing ratio tendencies corresponding to cam_in%cflx
+    !-------------------------------------------------------------
     do icnst=2,pcnst
 
        call addfld (trim(cnst_name(icnst))//'DTQ_SF',horiz_only, 'A','kg/kg/s or 1/kg/s', &
@@ -576,7 +584,9 @@ contains
        call add_default(trim(cnst_name(icnst))//'DTQ_SF',  1, ' ')
     end do
 
-    !---------
+    !------------------------------------------------
+    ! Deposition velocities of interstitial aerosols
+    !------------------------------------------------
     do imode=1,ntot_amode
 
        write(str,'(i0)') imode
@@ -592,7 +602,7 @@ contains
           call add_default('mss_a'//trim(adjustl(str))//'_TBV', 1, ' ')
        endif
     end do
-    !---------
+    !------------------------------------------------
 
     do m = 1,nwetdep
        if ( masterproc ) write(iulog,'(a,i3,2x,a)') 'm, wetdep_list', m, trim(wetdep_list(m)) ! REASTER 08/04/2015

@@ -2973,7 +2973,6 @@ end if
           !------------------------------------------------------------------------------
           ! Graviational settling of interstitial aerosols for a full ztodt
           !------------------------------------------------------------------------------
-
             dt_fac_grav_setl = 1._r8
             call interstitial_aero_grav_setl_tend( state, pbuf, dt_fac_grav_setl*ztodt, aerdepdryis_grv, vlc_grv, ptend )
             call physics_update(state, ptend, dt_fac_grav_setl*ztodt)
@@ -2985,10 +2984,21 @@ end if
           select case (cflx_cpl_opt)
           case(41,42,43,44)
           !------------------------------------------------------------------------------
-          ! Accumulate turbulent dry dep fluxes of substeps 
+          ! Add turbulent dry dep flux of macmic substep to the total dry dep flux.
+          ! Note that since fluxes in aerdepdryis(_trb) are per second,
+          ! aerdepdryis_trb values of different substeps need to be averaged.
           !------------------------------------------------------------------------------
             aerdepdryis(:ncol,:) = aerdepdryis(:ncol,:) + aerdepdryis_trb(:ncol,:)/cld_macmic_num_steps
 
+          !------------------------------------------------------------------------------
+          ! Send this substep's aerdepdryis_trb to output. Note that we are inside the 
+          ! macmic loop, so "call outfld" will take care of the averaging.
+          ! Also note that this call cannot be moved inside microp_aero_run or dropmixnuc,
+          ! because when cflx_cpl_opt /= 41,42,43,44, dropmixnuc will still be called
+          ! but turbulent dry deposition is handled by the old drydep code, in which
+          ! case outfld for *TBF needs to be called in the old code and not interefered
+          ! by anything in dropmixnuc.
+          !-----------------------------------------------------------------------------------
             call outfld_aero_cnst_2d( aerdepdryis_trb, 'TBF', lchnk )
           end select
 
