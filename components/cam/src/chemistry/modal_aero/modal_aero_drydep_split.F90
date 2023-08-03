@@ -337,7 +337,7 @@ contains
           call drydep_diags_for_1_tracer( lchnk, ncol, trim(cnst_name(icnst)), &! in
                                           vlc_dry(:,:,jvlc), vlc_trb(:,jvlc),  &! in
                                           vlc_grv(:,:,jvlc), sflx,             &! in
-                                          ptend%q(:,:,icnst)                   )! in
+                                          ptend%q(:,:,icnst),pdel(:,:)         )! in
 
           call outfld( trim(cnst_name(icnst))//'DDV', vlc_dry(:,:,jvlc), pcols, lchnk )
 
@@ -508,7 +508,8 @@ contains
           ptend%lq(icnst) = .true.
           ptend%q(:ncol,:,icnst) = dqdt_tmp(:ncol,:)
 
-          call outfld( trim(cnst_name(icnst))//'GVF',    sflx(:),        pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'GVF',    sflx(:),      pcols, lchnk )
+          call outfld( trim(cnst_name(icnst))//'DTQ_GV', dqdt_tmp(:,:),pcols, lchnk )
 
        enddo ! lspec = 1, nspec_amode(m)
 

@@ -529,13 +529,17 @@ contains
             trim(drydep_list(m))//' turbulent dry deposition flux')
        call addfld (trim(drydep_list(m))//'GVF',   horiz_only, 'A',unit_basename//'/m2/s ', &
             trim(drydep_list(m))//' gravitational dry deposition flux')
-       call addfld (trim(drydep_list(m))//'DTQ',(/ 'lev' /), 'A',unit_basename//'/kg/s ', &
-            trim(drydep_list(m))//' dry deposition')
        call addfld (trim(drydep_list(m))//'DDV',(/ 'lev' /), 'A','m/s', &
             trim(drydep_list(m))//' deposition velocity')
 
+       call addfld (trim(drydep_list(m))//'DTQ',(/ 'lev' /), 'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' dry deposition')
+
        call addfld (trim(drydep_list(m))//'DTQ_TB',horiz_only, 'A',unit_basename//'/kg/s ', &
                     trim(drydep_list(m))//' tendency due to turbulent dry deposition included alongside grav setl')
+
+       call addfld (trim(drydep_list(m))//'DTQ_GV',(/'lev'/),  'A',unit_basename//'/kg/s ', &
+                    trim(drydep_list(m))//' tendency due to gravitational settling')
 
        call addfld (trim(drydep_list(m))//'DTQMX_TB',horiz_only, 'A',unit_basename//'/kg/s ', &
                     trim(drydep_list(m))//' tendency due to turbulent dry deposition included in mixnuc solver')
