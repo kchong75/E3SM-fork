@@ -8,13 +8,166 @@
 module modal_aero_turb_drydep
 
   use shr_kind_mod,   only: r8 => shr_kind_r8
-  use ppgrid,         only: pcols
-  use physconst,      only: gravit
+  use ppgrid,         only: pcols, pver
+  use physconst,      only: gravit, rair
 
   implicit none
   public
 
 contains
+
+  !---------------------------------------------------------------------------------
+  subroutine get_gridcell_ram1_fricvel( state, cam_in, ram1, fricvel )
+
+    use physics_types,          only: physics_state
+    use camsrfexch,             only: cam_in_t
+    use clubb_intr,             only: clubb_surface
+
+    type(physics_state),    intent(in) :: state
+    type(cam_in_t),         intent(in) :: cam_in
+
+    real(r8),intent(out) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+    real(r8),intent(out) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+
+    real(r8) :: surfric(pcols)     ! surface friction velocity
+    real(r8) ::  obklen(pcols)     ! Obukhov length
+
+    call clubb_surface(state, cam_in, surfric, obklen)
+    call calcram( state%ncol,                                              &! in
+                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
+                  obklen,          surfric,                                &! in; calculated above in tphysac
+                  state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
+                  cam_in%ram1,     cam_in%fv,                              &! in
+                  ram1,            fricvel                               )  ! out
+
+  end subroutine get_gridcell_ram1_fricvel
+
+  !---------------------------------------------------------------------------------
+  ! !DESCRIPTION: 
+  !  
+  ! Calc aerodynamic resistance over oceans and sea ice from Seinfeld and Pandis, p.963.
+  !  
+  ! Author: Natalie Mahowald
+  ! Code refactor: Hui Wan, 2023
+  !---------------------------------------------------------------------------------
+  subroutine calcram(ncol,landfrac,icefrac,ocnfrac, &
+                     obklen,ustar,                  &
+                     tair, pmid, pdel,              &
+                     ram1_in, fv_in,                &
+                     ram1_out,fv_out )
+
+     implicit none
+     integer, intent(in) :: ncol
+
+     real(r8), intent(in) :: landfrac(pcols)  ! land fraction [unitless]
+     real(r8), intent(in) :: icefrac(pcols)   ! ice fraction  [unitless]
+     real(r8), intent(in) :: ocnfrac(pcols)   ! ocean fraction [unitless]
+
+     real(r8), intent(in) :: obklen(pcols)    ! Obukhov length [m]
+     real(r8), intent(in) :: ustar(pcols)     ! Surface friction velocity [m/s]
+
+     real(r8), intent(in) :: tair(pcols)      ! air temperature [K]
+     real(r8), intent(in) :: pmid(pcols)      ! air pressure [Pa]
+     real(r8), intent(in) :: pdel(pcols)      ! layer pressure thickness [Pa]
+
+     real(r8),intent(in) :: ram1_in(pcols)     ! aerodynamical resistance [s/m]
+     real(r8),intent(in) :: fv_in(pcols)       ! sfc friction velocity from land model [m/s]
+
+     real(r8),intent(out) :: ram1_out(pcols)   ! aerodynamical resistance [s/m]
+     real(r8),intent(out) :: fv_out(pcols)     ! sfc friction velocity of the current grid cell [m/s]
+
+     real(r8), parameter :: zzocen = 0.0001_r8   ! Ocean aerodynamic roughness length
+     real(r8), parameter :: zzsice = 0.0400_r8   ! Sea ice aerodynamic roughness length
+     real(r8), parameter :: xkar   = 0.4_r8      ! Von Karman constant
+
+     ! local variables
+
+     real(r8) :: zz,psi,psi0,nu,nu0,temp
+     integer :: ii
+
+     real(r8), parameter :: lndfrc_threshold = 0.000000001_r8  ! fraction, unitless
+
+     !---------------------------------------------------------------------------
+     ! Friction velocity:
+     !  - If the grid cell has a land fraction larger than a threshold (~zero),
+     !    then use fv_in (which comes from the coupler).
+     !  - Otherwise, use the ustar calculated in the atmosphere.
+     !---------------------------------------------------------------------------
+     where( landfrac(:ncol) > lndfrc_threshold )
+       fv_out(:ncol) = fv_in(:ncol)
+     elsewhere
+       fv_out(:ncol) = ustar(:ncol)
+     endwhere
+
+     ! fvitt -- fv == 0 causes a floating point exception in
+     ! dry dep of sea salts and dust
+
+     where ( fv_out(:ncol) == 0._r8 )
+        fv_out(:ncol) = 1.e-12_r8
+     endwhere
+
+     !-------------------------------------------------------------------
+     ! Aerodynamic resistence
+     !-------------------------------------------------------------------
+     do ii=1,ncol
+
+        ! If the grid cell has a land fraction larger than a threshold (~zero),
+        ! simply use ram1_in (which comes from the coupler)
+
+        if (landfrac(ii) > lndfrc_threshold) then
+           ram1_out(ii)=ram1_in(ii)
+
+        else
+        ! If the grid cell has a land fraction smaller than the threshold,
+        ! calculate aerodynamic resistence
+
+
+           ! calculate psi, psi0, temp
+
+           zz=pdel(ii)*rair*tair(ii)/pmid(ii)/gravit/2.0_r8   !use half the layer height like Ganzefeld and Lelieveld, 1995
+           if(obklen(ii).eq.0) then
+              psi=0._r8
+              psi0=0._r8
+           else
+              psi=min(max(zz/obklen(ii),-1.0_r8),1.0_r8)
+              psi0=min(max(zzocen/obklen(ii),-1.0_r8),1.0_r8)
+           endif
+
+           temp=zz/zzocen
+
+           ! special treatment for ice-dominant cells
+
+           if(icefrac(ii) > 0.5_r8) then 
+              if(obklen(ii).gt.0) then 
+                 psi0=min(max(zzsice/obklen(ii),-1.0_r8),1.0_r8)
+              else
+                 psi0=0.0_r8
+              endif
+              temp=zz/zzsice
+           endif
+
+           ! calculate aerodynamic resistence
+
+           if(psi> 0._r8) then
+              ram1_out(ii) =1/xkar/ustar(ii)*(log(temp)+4.7_r8*(psi-psi0))
+           else
+              nu=(1.00_r8-15.000_r8*psi)**(.25_r8)
+              nu0=(1.000_r8-15.000_r8*psi0)**(.25_r8)
+              if(ustar(ii).ne.0._r8) then
+                 ram1_out(ii) =1/xkar/ustar(ii)*(log(temp) &
+                      +log(((nu0**2+1.00_r8)*(nu0+1.0_r8)**2)/((nu**2+1.0_r8)*(nu+1.00_r8)**2)) &
+                      +2.0_r8*(atan(nu)-atan(nu0)))
+              else
+                 ram1_out(ii) =0._r8
+              endif
+           endif
+
+        endif  ! if grid cell has land fraction > threshold or not
+
+     enddo ! loop over grid columns
+
+  end subroutine calcram
+
   
   !------------------------------------------------------------------------------------
   ! Calculate particle velocity of turbulent dry deposition.

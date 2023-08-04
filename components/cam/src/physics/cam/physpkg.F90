@@ -156,7 +156,7 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use cld_cpl_utils,      only: cld_cpl_register
-    use modal_aero_drydep_split,only: modal_aero_drydep_register
+    use modal_aero_drydep,  only: modal_aero_drydep_register
 
     !---------------------------Local variables-----------------------------
     !
@@ -1357,14 +1357,13 @@ subroutine tphysac (ztodt,   cam_in,               &
     use aoa_tracers,        only: aoa_tracers_timestep_tend
     use physconst,          only: rhoh2o, latvap,latice, rga
 
-    use aero_model,              only: aero_model_drydep_old => aero_model_drydep
+    use aero_model,              only: aero_model_drydep_old   => aero_model_drydep
+    use modal_aero_drydep_refac, only: aero_model_drydep_refac => aero_model_drydep_main
 
-    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel
-    use modal_aero_drydep_split, only: aero_model_drydep_interstitial
-    use modal_aero_drydep_split, only: aero_model_drydep_cloudborne
-    use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
-    use aerodep_flx,             only: aerodep_flx_prescribed
-    use modal_aero_deposition,   only: set_srf_drydep
+    use modal_aero_turb_drydep,  only: get_gridcell_ram1_fricvel
+    use modal_aero_drydep_refac, only: aero_model_drydep_cloudborne
+
+    use modal_aero_drydep,       only: interstitial_aero_grav_setl_tend
 
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
@@ -1690,23 +1689,57 @@ if (l_tracer_aero) then
     !===================================================
     ! Aerosol dry deposition processes
     !===================================================
-
-    if ( cflx_cpl_opt <= 4 ) then
-       !---------------------------------------------------------------
-       ! Calculate both grav setl and turb dry dep for both cloud-borne
-       ! and interstitial aerosols,  using the old code
-       !---------------------------------------------------------------
-       if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
-
+    select case (cflx_cpl_opt)
+    case(1,2,3,4)
+       !--------------------------------------------------------------------------------------------------------------------
+       ! Calculate both gravitational settling and turbulent dry deposition for both cloud-borne and interstitial aerosols,
+       ! using refactored code from 2023.
+       !
+       ! The refactored code includes the following output
+       ! |-------------------------------------------------------------------------------------|--------------|-------------|
+       ! |                   Fields                                                            | Interstitial | Cloud-borne |
+       ! | Total sfc fluxes due to dry dep (*DDF), and the two contributors (*TBF,    *GVF)    |   Yes        |  Yes        |
+       ! | Total tendency   due to dry dep (*DTQ), and the two contributors (*DTQ_TB, *DTQ_GV) |   Yes        |  No         |
+       ! | Total deposition velocity (*DDV) of each tracer, no output for the two contributors |   Yes        |  No         |
+       ! ! Four velocities, num_a?_GVV, mss_a?_GVV, num_a?_TBV, mss_a?_TBV, of each mode       |   Yes        |  No         |
+       !---------------------------------------------------------------------------------------------------------------------
        call t_startf('aero_drydep')
+       call aero_model_drydep_refac( state, pbuf, cam_in, ztodt, cam_out, ptend )
+       call physics_update(state, ptend, ztodt, tend)
+       call t_stopf('aero_drydep')
+
+    case(40)
+       !--------------------------------------------------------------------------------------------------------------------
+       ! Calculate both gravitational settling and turbulent dry deposition for both cloud-borne and interstitial aerosols,
+       ! using the old code in src/chemistry/modal_aero/aero_model.F90.
+       !
+       ! The old code included the following output: 
+       ! |-------------------------------------------------------------------------------|--------------|-------------|
+       ! |                    Fields                                                     | Interstitial | Cloud-borne |
+       ! | Total sfc fluxes due to dry dep (*DDF), and the two contributors (*TBF, *GVF) |   Yes        |  Yes        |
+       ! | Ttotal tendency  due to dry dep (*DTQ), no output for the two contributors    |   Yes        |  No         |
+       ! | Total deposition velocity       (*DDV), no output for the two contributors    |   Yes        |  No         |
+       !--------------------------------------------------------------------------------------------------------------------
+       call t_startf('aero_drydep')
+       if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
        call aero_model_drydep_old( state, pbuf, obklen, surfric, cam_in, ztodt, cam_out, ptend )
        call physics_update(state, ptend, ztodt, tend)
        call t_stopf('aero_drydep')
 
-    else
-       !---------------------------------------------------------------
-       ! pbuf variables
-       !---------------------------------------------------------------
+    case(41,42,43,44)
+       !--------------------------------------------------------------------------------------------------
+       ! These options all use refactored code.
+       !  - Option 40 was introduced for a software sanity check for the code refactoring.
+       !    the numercal scheme is identical to option 4 and the results are expected to be BFB identical.
+       !  - In options 41-44, turbulent dry deposition of interstitial aerosols is
+       !    numerically solved in dropmixnuc. Gravitational settling of interstitial aerosols 
+       !    is coupled with dropmixnuc in different ways.
+       !  - In all cases (40-44), the surface emissions are treated as a forcing term 
+       !    in dropmixnuc; Dry removal of cloub-borne aerosols are still calculated
+       !    here using an assumed cloud droplet size.
+       !--------------------------------------------------------------------------------------------------
+       ! The following variables are in pbuf, so that they are available for use in tphysac
+
        call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
        call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYIS'), aerdepdryis )
        call pbuf_get_field(pbuf, pbuf_get_index('AERDEPDRYCW'), aerdepdrycw )
@@ -1721,27 +1754,9 @@ if (l_tracer_aero) then
        ! Interstitial aerosols
        !---------------------------------------------------------------
        select case (cflx_cpl_opt)
-       case(40)
-         !---------------------------------------------------------------
-         ! Interstitial aerosols: both grav setl and turb dry dep
-         !---------------------------------------------------------------
-         call outfld( 'RAM1',     ram1(:), pcols, lchnk )
-         call outfld( 'airFV', fricvel(:), pcols, lchnk )
-
-         call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, ztodt, aerdepdryis, ptend )
-         call physics_update(state, ptend, ztodt, tend)
-
-         ! Unless the user has specified prescribed aerosol dep fluxes,
-         ! copy the fluxes calculated here to cam_out to be passed to other 
-         ! components of the Earth System Model.
-         if (.not.aerodep_flx_prescribed()) then 
-            call set_srf_drydep(aerdepdryis, aerdepdrycw, cam_out)
-         endif
-
        case(41,43)
-         !--------------------------------------------------------------------------------------
-         ! Interstitial aerosols: gravitational settling only, for a full ztodt or half ztodt
-         !--------------------------------------------------------------------------------------
+         ! Gravitational settling only, for a full ztodt or half ztodt
+
          if (cflx_cpl_opt==41) dt_fac_grav_setl = 1._r8
          if (cflx_cpl_opt==43) dt_fac_grav_setl = .5_r8
 
@@ -1756,15 +1771,15 @@ if (l_tracer_aero) then
          ! (The accumulation is supposed to be done over an atm-sfc coupling timestep.)
          ! Full-time-step calculation of gravitational settling is
          ! done later after or during cloud mac-mic subcycles;
-         ! Turbulent dry deposition is done together with dropmix nuc.
+         ! Turbulent dry deposition is numerically solved as part of dropmixnuc.
 
          aerdepdryis(:ncol,:) = 0._r8
 
-       case default
-         call endrun ('TPHYSAC error: unrecognized cflx_cpl_opt value')
        end select
 
-    end if
+    case default
+      call endrun ('TPHYSAC error: unrecognized cflx_cpl_opt value')
+    end select
     call cnd_diag_checkpoint( diag, 'AERDRYRM1', state, pbuf, cam_in, cam_out )
 
    !===================================================
@@ -2033,9 +2048,10 @@ subroutine tphysbc (ztodt,                          &
     use cld_cpl_utils,   only: set_state_and_tendencies, save_state_snapshot_to_pbuf
 
     use sfc_cpl_opt,             only: cflx_tend
-    use modal_aero_drydep_split, only: interstitial_aero_grav_setl_tend
-    use modal_aero_drydep_split, only: interstitial_aero_turb_dep_velocity
-    use modal_aero_drydep_utils, only: get_gridcell_ram1_fricvel, outfld_aero_cnst_2d
+    use modal_aero_drydep,       only: interstitial_aero_grav_setl_tend
+    use modal_aero_drydep,       only: interstitial_aero_turb_dep_velocity
+    use modal_aero_turb_drydep,  only: get_gridcell_ram1_fricvel
+    use modal_aero_drydep_utils, only: outfld_aero_cnst_2d
     use aerodep_flx,             only: aerodep_flx_prescribed
     use modal_aero_deposition,   only: set_srf_drydep
 
