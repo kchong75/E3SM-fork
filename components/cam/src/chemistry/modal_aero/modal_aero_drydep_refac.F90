@@ -412,7 +412,7 @@ contains
 
     use modal_aero_grav_setl,   only: modal_aero_gravit_settling_velocity
     use modal_aero_turb_drydep, only: modal_aero_turb_drydep_velocity
-    use modal_aero_drydep,      only: radius_max
+    use modal_aero_drydep_utils,only: aer_rmax
 
     integer,  intent(in) :: moment       ! moment of size distribution (0 for number, 2 for surface area, 3 for volume)
     integer,  intent(in) :: ncol         ! # of grid columns to do calculations for
@@ -438,7 +438,7 @@ contains
     !------------------------------------------------------------------------------------
     ! Calculate deposition velocity of gravitational settling in all grid layers
     !------------------------------------------------------------------------------------
-    call modal_aero_gravit_settling_velocity( moment, ncol, pcols, pver, radius_max,           &! in
+    call modal_aero_gravit_settling_velocity( moment, ncol, pcols, pver, aer_rmax,             &! in
                                               tair, pmid, radius_part, density_part, sig_part, &! in
                                               vlc_grv                                          )! out
 
@@ -450,7 +450,7 @@ contains
     !  - Calculate turbulent dry deposition velocity, vlc_trb.
     !  - Add vlc_trb to vlc_grv to give the total deposition velocity, vlc_dry.
     !------------------------------------------------------------------------------------
-    call modal_aero_turb_drydep_velocity( moment, ncol, pcols, lchnk, radius_max,    &! in
+    call modal_aero_turb_drydep_velocity( moment, ncol, pcols, lchnk, aer_rmax,      &! in
                                           tair(:,pver), pmid(:,pver),                &! in
                                           radius_part(:,pver), density_part(:,pver), &! in
                                           sig_part(:,pver),                          &! in

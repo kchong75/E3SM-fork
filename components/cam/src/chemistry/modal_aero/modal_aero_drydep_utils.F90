@@ -10,7 +10,29 @@ module modal_aero_drydep_utils
   implicit none
   public
 
+  real(r8),parameter,public :: aer_rmax = 50.0e-6_r8
+
 contains
+
+  !=======================================================================================
+  ! Purpose: Register pbuf fields for aerosols needed by dry deposition
+  ! Author: Hui Wan, July 2023
+  !=======================================================================================
+  subroutine modal_aero_drydep_register
+
+  use physics_buffer, only: pbuf_add_field, dtype_r8
+  use modal_aero_data,only: ntot_amode
+  use constituents,   only: pcnst
+
+  integer :: idx
+
+  call pbuf_add_field('AMODEGVV',   'global',dtype_r8,(/pcols,pver,4,ntot_amode/), idx)
+  call pbuf_add_field('AMODETBV',   'global',dtype_r8,(/pcols,     4,ntot_amode/), idx)
+  call pbuf_add_field('AERDEPDRYIS','global',dtype_r8,(/pcols,pcnst/),             idx)
+  call pbuf_add_field('AERDEPDRYCW','global',dtype_r8,(/pcols,pcnst/),             idx)
+
+  end subroutine modal_aero_drydep_register
+
 
   !=================================================================================
   !=================================================================================

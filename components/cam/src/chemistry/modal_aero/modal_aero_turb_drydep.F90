@@ -10,9 +10,15 @@ module modal_aero_turb_drydep
   use shr_kind_mod,   only: r8 => shr_kind_r8
   use ppgrid,         only: pcols, pver
   use physconst,      only: gravit, rair
+  use perf_mod,       only: t_startf, t_stopf
+  use cam_history,    only: outfld
 
   implicit none
-  public
+  private
+
+  public :: get_gridcell_ram1_fricvel
+  public :: interstitial_aero_turb_dep_velocity
+  public :: modal_aero_turb_drydep_velocity
 
 contains
 
@@ -168,6 +174,117 @@ contains
 
   end subroutine calcram
 
+  !========================================================================================
+  !========================================================================================
+  subroutine interstitial_aero_turb_dep_velocity( state, pbuf, ram1, fricvel, vlc_grv, vlc_trb )
+
+    use physics_types,    only: physics_state
+    use physics_buffer,   only: physics_buffer_desc, pbuf_get_field
+    use modal_aero_data,  only: ntot_amode
+    use modal_aero_data,  only: alnsg_amode, sigmag_amode
+    use aero_model,       only: dgnumwet_idx, wetdens_ap_idx, nmodes
+
+    use modal_aero_drydep_utils, only: aer_rmax
+
+    type(physics_state),    intent(in) :: state
+    type(physics_buffer_desc), pointer :: pbuf(:)
+
+    real(r8),intent(in)  ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+    real(r8),intent(in)  :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+
+    ! Deposition velocities. The last dimension (size = 4) corresponds to the
+    ! two attachment states and two moments:
+    !   1 - interstitial aerosol, 0th moment (i.e., number)
+    !   2 - interstitial aerosol, 3rd moment (i.e., volume/mass)
+    !   3 - cloud-borne aerosol,  0th moment (i.e., number)
+    !   4 - cloud-borne aerosol,  3rd moment (i.e., volume/mass)
+    !
+    ! Argument vlc_trb has intent(inout) because this subroutine only
+    ! calculates values for interstitial aerosols, and we do not want to
+    ! touch the velocities of cloud-borne aerosols.
+
+    real(r8),intent(in)    :: vlc_grv(pcols,4,ntot_amode)  !  gravitational settling   velocity in lowest layer 
+    real(r8),intent(inout) :: vlc_trb(pcols,4,ntot_amode)  !  turbulent dry deposition velocity in lowest layer 
+
+    ! Local variables
+
+    real(r8) :: vlc_dry(pcols)  !  total dry deposition velocity in lowest layer 
+
+
+    real(r8), pointer :: dgncur_awet(:,:,:) ! geometric mean wet diameter for number distribution [m]
+    real(r8), pointer :: wetdens(:,:,:)     ! wet density of interstitial aerosol [kg/m3]
+
+    real(r8) ::   rad_aer(pcols)  ! volume mean wet radius of interstitial aerosols [m]
+    real(r8) ::  dens_aer(pcols)  ! wet density of interstitial aerosols [kg/m3]
+    real(r8) ::    sg_aer(pcols)  ! assumed geometric standard deviation of particle size distribution
+
+    real(r8) ::    tair(pcols)
+    real(r8) ::    pmid(pcols)
+    real(r8) ::    pdel(pcols)
+
+    integer :: lchnk   ! chunk identifier
+    integer :: ncol    ! number of active atmospheric columns
+    integer :: imode   ! aerosol mode index
+    integer :: imnt    ! moment of the aerosol size distribution. 0 = number; 3 = volume
+    integer :: jvlc    ! index for last dimension of vlc_xxx arrays
+
+    character(len=3) :: str
+
+    lchnk = state%lchnk
+    ncol  = state%ncol
+
+    tair  = state%t(:,pver)
+    pmid  = state%pmid(:,pver)
+    pdel  = state%pdel(:,pver)
+
+    call pbuf_get_field(pbuf, dgnumwet_idx,   dgncur_awet, start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+    call pbuf_get_field(pbuf, wetdens_ap_idx, wetdens,     start=(/1,1,1/), kount=(/pcols,pver,nmodes/) ) 
+
+    !------------------------------------------------------------------------
+    ! Calculate turbulent dry deposition velocities of interstitial aerosols.
+    ! Note that within a grid cell, for each lognormal mode of the 
+    ! aerosol size distribution, we have
+    !  - one velocity for number mixing ratio of the mode;
+    !  - one velocity for all mass mixing ratios of the mode.
+    !-----------------------------------------------------------------
+    call t_startf('vlc_trb_interstitial')
+
+    do imode = 1, ntot_amode   ! loop over aerosol modes
+
+        rad_aer(1:ncol) = 0.5_r8*dgncur_awet(1:ncol,pver,imode) *exp(1.5_r8*(alnsg_amode(imode)**2))
+       dens_aer(1:ncol) = wetdens(1:ncol,pver,imode)
+         sg_aer(1:ncol) = sigmag_amode(imode)
+
+       jvlc = 1  ; imnt = 0  ! interstitial aerosol number
+       call modal_aero_turb_drydep_velocity( imnt, ncol, pcols, lchnk, aer_rmax,    &! in
+                                             tair, pmid,                            &! in
+                                             rad_aer, dens_aer, sg_aer,             &! in
+                                             fricvel, ram1,                         &! in
+                                             vlc_grv(:,jvlc,imode), &! in
+                                             vlc_trb(:,jvlc,imode), &! out
+                                             vlc_dry(:)             )! out
+
+       jvlc = 2  ; imnt = 3  ! interstitial aerosol volume/mass
+       call modal_aero_turb_drydep_velocity( imnt, ncol, pcols, lchnk, aer_rmax,    &! in
+                                             tair, pmid,                            &! in
+                                             rad_aer, dens_aer, sg_aer,             &! in
+                                             fricvel, ram1,                         &! in
+                                             vlc_grv(:,jvlc,imode), &! in
+                                             vlc_trb(:,jvlc,imode), &! out
+                                             vlc_dry(:)             )! out
+
+       !-------------------------------
+       ! Write out settling velocities
+       !-------------------------------
+       write(str,'(i0)') imode
+       call outfld( 'num_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,1,imode), pcols, lchnk )
+       call outfld( 'mss_a'//trim(adjustl(str))//'_TBV', vlc_trb(:,2,imode), pcols, lchnk )
+
+    enddo ! imode = 1, ntot_amode
+
+    call t_stopf('vlc_trb_interstitial')
+
+  end subroutine interstitial_aero_turb_dep_velocity
   
   !------------------------------------------------------------------------------------
   ! Calculate particle velocity of turbulent dry deposition.
