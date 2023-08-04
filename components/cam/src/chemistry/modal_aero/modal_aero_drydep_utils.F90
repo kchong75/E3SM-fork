@@ -12,6 +12,8 @@ module modal_aero_drydep_utils
 
 contains
 
+  !=================================================================================
+  !=================================================================================
   subroutine outfld_aero_cnst_2d( fld, suffix, lchnk )
 
   use modal_aero_data,         only: ntot_amode, nspec_amode
@@ -40,9 +42,82 @@ contains
   end do
 
   end subroutine outfld_aero_cnst_2d  
-  !-----------------------------------------------------------------------
+
+  !=================================================================================
+  ! Calculate some diagnostics for output. This does not affect time integration.
+  !=================================================================================
+  subroutine drydep_diags_for_1_tracer( lchnk, ncol, cnst_name_in, vlc_dry, vlc_trb, vlc_grv, sflx, dqdt_sed, pdel )
+
+    use physconst,      only: gravit
+    use cam_history,    only: outfld
+    use cam_abortutils, only: endrun
+
+    integer, intent(in) :: lchnk  ! chunk index
+    integer, intent(in) :: ncol   ! # of active columns 
+
+    character(len=*), intent(in) :: cnst_name_in  ! tracer name
+
+    real(r8),intent(in) :: vlc_trb(pcols)       ! deposition velocity of turbulent dry deposition [m/s]
+    real(r8),intent(in) :: vlc_grv(pcols,pver)  ! deposition velocity of gravitational settling [m/s]
+    real(r8),intent(in) :: vlc_dry(pcols,pver)  ! deposition velocity of both mechanisms combined  [m/s]
+    real(r8),intent(in) ::    sflx(pcols)       ! total deposition flux at the surface for one species [kg/m2/s] or [1/m2/s]
+
+    real(r8),intent(in),optional :: dqdt_sed(pcols,pver)
+    real(r8),intent(in),optional ::     pdel(pcols,pver)
+
+    real(r8) :: dep_trb(pcols)       ! turbulent dry deposition portion of sflx [kg/m2/s] or [1/m2/s]
+    real(r8) :: dep_grv(pcols)       ! gravitational settling   portion of slfx [kg/m2/s] or [1/m2/s]
+    real(r8) :: tnd_trb(pcols)       ! diagnosed tendency corresponding to dep_trb [kg/kg/s] or [1/kg/s]
+    real(r8) :: tnd_grv(pcols,pver)  ! diagnosed tendency corresponding to dep_trb [kg/kg/s] or [1/kg/s]
+    integer :: ii
+
+    !----------
+    ! Fluxes
+    !----------
+    dep_trb(:) = 0._r8
+    dep_grv(:) = 0._r8
+
+    ! apportion dry deposition into turb and gravitational settling for tapes
+
+    do ii=1,ncol
+       if (vlc_dry(ii,pver) .ne. 0._r8) then
+          dep_trb(ii)=sflx(ii)*vlc_trb(ii)/vlc_dry(ii,pver)
+          dep_grv(ii)=sflx(ii)*vlc_grv(ii,pver)/vlc_dry(ii,pver)
+       endif
+    enddo
+
+    ! send diagnostics to output
+
+    call outfld( cnst_name_in//'DDF', sflx,     pcols, lchnk)
+    call outfld( cnst_name_in//'TBF', dep_trb,  pcols, lchnk)
+    call outfld( cnst_name_in//'GVF', dep_grv,  pcols, lchnk)
+
+    !-------------
+    ! Tendencies
+    !-------------
+    if ( present(dqdt_sed) ) then 
+
+       if(.not.present(pdel)) call endrun("drydep_diags_for_1_tracer: please check input arguments")
+
+       ! Diagnose tendency caused by turbulent dry deposition
+       tnd_trb(1:ncol) = -dep_trb(1:ncol)*gravit/pdel(1:ncol,pver)
+
+       ! Diagnose tendency caused by gravitational settling
+       tnd_grv(1:ncol,:)    = dqdt_sed(1:ncol,:)
+       tnd_grv(1:ncol,pver) = dqdt_sed(1:ncol,pver) - tnd_trb(1:ncol)
+
+       ! Send to output
+       call outfld( cnst_name_in//'DTQ_TB', tnd_trb,  pcols, lchnk)
+       call outfld( cnst_name_in//'DTQ_GV', tnd_grv,  pcols, lchnk)
+       call outfld( cnst_name_in//'DTQ',    dqdt_sed, pcols, lchnk)
+
+     end if
+
+  end subroutine drydep_diags_for_1_tracer
+
+  !=============================================================================
   ! Numerically solve the sedimentation equation for 1 tracer
-  !-----------------------------------------------------------------------
+  !=============================================================================
   subroutine sedimentation_solver_for_1_tracer( ncol, dt, sed_vel, qq_in,            &! in
                                                 rho, tair, pint, pmid, pdel,         &! in
                                                 dqdt_sed, sflx                       )! out
