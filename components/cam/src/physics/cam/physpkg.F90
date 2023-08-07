@@ -156,7 +156,7 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use cld_cpl_utils,      only: cld_cpl_register
-    use modal_aero_drydep,  only: modal_aero_drydep_register
+    use modal_aero_drydep_utils, only: modal_aero_drydep_register
 
     !---------------------------Local variables-----------------------------
     !
@@ -1359,11 +1359,10 @@ subroutine tphysac (ztodt,   cam_in,               &
 
     use aero_model,              only: aero_model_drydep_old   => aero_model_drydep
     use modal_aero_drydep_refac, only: aero_model_drydep_refac => aero_model_drydep_main
-
-    use modal_aero_turb_drydep,  only: get_gridcell_ram1_fricvel
     use modal_aero_drydep_refac, only: aero_model_drydep_cloudborne
 
-    use modal_aero_drydep,       only: interstitial_aero_grav_setl_tend
+    use modal_aero_grav_setl,    only: interstitial_aero_grav_setl_tend
+    use modal_aero_turb_drydep,  only: get_gridcell_ram1_fricvel
 
     use carma_intr,         only: carma_emission_tend, carma_timestep_tend
     use carma_flags_mod,    only: carma_do_aerosol, carma_do_emission
@@ -2048,8 +2047,8 @@ subroutine tphysbc (ztodt,                          &
     use cld_cpl_utils,   only: set_state_and_tendencies, save_state_snapshot_to_pbuf
 
     use sfc_cpl_opt,             only: cflx_tend
-    use modal_aero_drydep,       only: interstitial_aero_grav_setl_tend
-    use modal_aero_drydep,       only: interstitial_aero_turb_dep_velocity
+    use modal_aero_grav_setl,    only: interstitial_aero_grav_setl_tend
+    use modal_aero_turb_drydep,  only: interstitial_aero_turb_dep_velocity
     use modal_aero_turb_drydep,  only: get_gridcell_ram1_fricvel
     use modal_aero_drydep_utils, only: outfld_aero_cnst_2d
     use aerodep_flx,             only: aerodep_flx_prescribed
