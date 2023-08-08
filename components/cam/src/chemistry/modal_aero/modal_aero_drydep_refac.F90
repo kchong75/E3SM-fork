@@ -452,8 +452,8 @@ contains
                                               tair, pmid, radius_part, density_part, sig_part, &! in
                                               vlc_grv                                          )! out
 
-    ! vlc_dry is just the gravitational settling velocity for now.
-    vlc_dry(:ncol,:)=vlc_grv(:ncol,:)
+    ! vlc_dry in layers above the lowest is just the gravitational settling velocity
+    vlc_dry(:ncol,1:pver-1) = vlc_grv(:ncol,1:pver-1)
 
     !------------------------------------------------------------------------------------
     ! For the lowest model layer:
