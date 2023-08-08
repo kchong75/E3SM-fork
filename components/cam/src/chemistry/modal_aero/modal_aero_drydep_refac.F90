@@ -1,10 +1,18 @@
-!===============================================================================
+!=========================================================================================
 ! Calculations of 
 !  - changes in interstitial aerosol mixing ratios caused by
 !    gravitational settling and turbulent dry deposition of aerosol particles,
 !  - changes in cloud-borne aerosol mixing ratios caused by 
 !    gravitational settling and turbulent dry deposition of cloud droplets.
-!===============================================================================
+!
+! This module contains a refactored version of the subroutine aero_model_drydep
+! in src/chemistry/modal_aero/aero_model.F90 from 2023, now named aero_model_drydep_main.
+! Like in the original code, the calculated dry deposition velocities include effects
+! of both turbulent dry deposition and gravitational settling.
+! The two processes are numerically solved together using Phil Rasch's SPITFIRE algorithm.
+!
+! POC of this module: Hui Wan, PNNL.
+!=========================================================================================
 module modal_aero_drydep_refac
 
   use shr_kind_mod,   only: r8 => shr_kind_r8
@@ -21,7 +29,10 @@ module modal_aero_drydep_refac
   public :: aero_model_drydep_interstitial
 
 contains
+
   !=============================================================================
+  ! Main subroutine that calculates deposition velocities and solves PDEs
+  ! for interstitial and cloud-borne aerosols.
   !=============================================================================
   subroutine aero_model_drydep_main( state, pbuf, cam_in, dt, cam_out, ptend )
 
@@ -51,7 +62,7 @@ contains
     lchnk = state%lchnk
 
     !------------------------------------------------------------------
-    ! Calculate/get ram1 and fricvel for each grid cell in this chunk
+    ! Calculate/copy ram1 and fricvel for each grid cell in this chunk
     !------------------------------------------------------------------
     call get_gridcell_ram1_fricvel(state, cam_in, ram1, fricvel)
     call outfld( 'RAM1',     ram1(:), pcols, lchnk )
@@ -59,14 +70,14 @@ contains
 
     !---------------------------------------------------------------------------------------------
     ! Dry deposition of cloud-borne aerosols.
-    ! Note the corresponding mixing ratios are in pbuf, so there is no ptend in the argument list 
+    ! Note the corresponding mixing ratios are in pbuf, so there is no ptend in the argument list.
     !----------------------------------------------------------------------------------------------
     call aero_model_drydep_cloudborne( state, pbuf, ram1, fricvel, dt, aerdepdrycw )
 
-    !---------------------------------------------------------------------------------------------
+    !-----------------------------------------------------------------------------------------------------------
     ! Dry deposition of interstitial aerosols.
-    ! The corresponding mixing ratios are part of state%q, so ptend is part of the argument list.
-    !---------------------------------------------------------------------------------------------
+    ! The corresponding mixing ratios are part of state%q, so ptend is an output variable on the argument list.
+    !-----------------------------------------------------------------------------------------------------------
     call aero_model_drydep_interstitial( state, pbuf, ram1, fricvel, dt, aerdepdryis, ptend )
 
     !------------------------------------------------------------------
@@ -82,7 +93,6 @@ contains
 
   !=============================================================================
   ! Main subroutine for dry deposition of cloud-borne aerosols. 
-  ! Also serves as the interface routine called by EAM's physics driver.
   !=============================================================================
   subroutine aero_model_drydep_cloudborne  ( state, pbuf, ram1, fricvel, dt, aerdepdrycw )
 
