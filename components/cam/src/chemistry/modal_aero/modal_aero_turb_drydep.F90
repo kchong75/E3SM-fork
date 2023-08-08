@@ -27,36 +27,43 @@ contains
 
     use physics_types,          only: physics_state
     use camsrfexch,             only: cam_in_t
-    use clubb_intr,             only: clubb_surface
+    use clubb_intr,             only: calc_ustar_obklen => clubb_surface
 
     type(physics_state),    intent(in) :: state
     type(cam_in_t),         intent(in) :: cam_in
 
-    real(r8),intent(out) ::    ram1(pcols)     ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
-    real(r8),intent(out) :: fricvel(pcols)     ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
+    real(r8),intent(out) ::    ram1(pcols) ! aerodynamical resistance used in the calculaiton of turbulent dry deposition velocity [s/m]
+    real(r8),intent(out) :: fricvel(pcols) ! friction velocity used in the calculaiton of turbulent dry deposition velocity [m/s]
 
-    real(r8) :: surfric(pcols)     ! surface friction velocity
+    real(r8) ::  ustar(pcols)      ! surface friction velocity
     real(r8) ::  obklen(pcols)     ! Obukhov length
 
-    call clubb_surface(state, cam_in, surfric, obklen)
-    call calcram( state%ncol,                                              &! in
-                  cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
-                  obklen,          surfric,                                &! in; calculated above in tphysac
-                  state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
-                  cam_in%ram1,     cam_in%fv,                              &! in
-                  ram1,            fricvel                               )  ! out
+    call calc_ustar_obklen( state, cam_in, ustar, obklen )
+    call calc_ram( state%ncol,                                              &! in
+                   cam_in%landfrac, cam_in%icefrac, cam_in%ocnfrac,         &! in
+                   obklen,          ustar,                                  &! in; calculated above in tphysac
+                   state%t(:,pver), state%pmid(:,pver), state%pdel(:,pver), &! in; note: bottom level only
+                   cam_in%ram1,     cam_in%fv,                              &! in
+                   ram1,            fricvel                               )  ! out
 
   end subroutine get_gridcell_ram1_fricvel
 
-  !---------------------------------------------------------------------------------
+  !----------------------------------------------------------------------------------------------
   ! !DESCRIPTION: 
   !  
-  ! Calc aerodynamic resistance over oceans and sea ice from Seinfeld and Pandis, p.963.
+  ! Determine a single aerodynamic resistance value for the grid cell.
+  !  - If the grid cell has non-zero land fraction, use the value from the coupler (ram1_in);
+  !  - Otherwise (for oceans and sea ice), calculate a value from Seinfeld and Pandis
+  !    (2006, 2nd edition, ISBN-13: 978-0471720188. p.907, Eq. 19.13-19.14)
   !  
+  ! Determine a single friction velocity for the grid cell.
+  !  - If the grid cell has non-zero land fraction, use the value from the coupler (fv_in);
+  !  - Otherwise (for oceans and sea ice), use the value from the atmosphere model (ustar).
+  !
   ! Author: Natalie Mahowald
   ! Code refactor: Hui Wan, 2023
-  !---------------------------------------------------------------------------------
-  subroutine calcram(ncol,landfrac,icefrac,ocnfrac, &
+  !----------------------------------------------------------------------------------------------
+  subroutine calc_ram(ncol,landfrac,icefrac,ocnfrac, &
                      obklen,ustar,                  &
                      tair, pmid, pdel,              &
                      ram1_in, fv_in,                &
@@ -172,7 +179,7 @@ contains
 
      enddo ! loop over grid columns
 
-  end subroutine calcram
+  end subroutine calc_ram
 
   !========================================================================================
   !========================================================================================
