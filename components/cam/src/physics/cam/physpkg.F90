@@ -1718,6 +1718,7 @@ if (l_tracer_aero) then
        ! | Total sfc fluxes due to dry dep (*DDF), and the two contributors (*TBF, *GVF) |   Yes        |  Yes        |
        ! | Ttotal tendency  due to dry dep (*DTQ), no output for the two contributors    |   Yes        |  No         |
        ! | Total deposition velocity       (*DDV), no output for the two contributors    |   Yes        |  No         |
+       ! ! Four velocities, num_a?_GVV, mss_a?_GVV, num_a?_TBV, mss_a?_TBV, of each mode |   No         |  No         |
        !--------------------------------------------------------------------------------------------------------------------
        call t_startf('aero_drydep')
        if (do_clubb_sgs) call clubb_surface(state, cam_in, surfric, obklen)
@@ -1726,17 +1727,14 @@ if (l_tracer_aero) then
        call t_stopf('aero_drydep')
 
     case(41,42,43,44)
-       !--------------------------------------------------------------------------------------------------
-       ! These options all use refactored code.
-       !  - Option 40 was introduced for a software sanity check for the code refactoring.
-       !    the numercal scheme is identical to option 4 and the results are expected to be BFB identical.
-       !  - In options 41-44, turbulent dry deposition of interstitial aerosols is
-       !    numerically solved in dropmixnuc. Gravitational settling of interstitial aerosols 
-       !    is coupled with dropmixnuc in different ways.
-       !  - In all cases (40-44), the surface emissions are treated as a forcing term 
-       !    in dropmixnuc; Dry removal of cloub-borne aerosols are still calculated
-       !    here using an assumed cloud droplet size.
-       !--------------------------------------------------------------------------------------------------
+       !------------------------------------------------------------------------------------------------------------
+       ! These options have the following in common:
+       !  - They all use the refactored code.
+       !  - Dry removal of cloub-borne aerosols remains the same as in options 1-4 and 40.
+       !  - Surface emissions are treated as a forcing term in dropmixnuc, like in schemes 4 and 40.
+       !  - Turbulent dry deposition of interstitial aerosols is numerically solved in dropmixnuc.
+       ! Options 41-44 differ in how the gravitational settling of interstitial aerosols is coupled with dropmixnuc.
+       !------------------------------------------------------------------------------------------------------------
        ! The following variables are in pbuf, so that they are available for use in tphysac
 
        call pbuf_get_field(pbuf, pbuf_get_index('AMODEGVV'),    vlc_grv )
@@ -1746,8 +1744,8 @@ if (l_tracer_aero) then
        !---------------------------------------------------------------
        ! Cloud-borne aerosols only, both grav setl and turb dry dep
        !---------------------------------------------------------------
-       call get_gridcell_ram1_fricvel(state, cam_in, ram1, fricvel)
-       call aero_model_drydep_cloudborne( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw )
+       call get_gridcell_ram1_fricvel(state, cam_in, ram1, fricvel)  ! in, in, out, out
+       call aero_model_drydep_cloudborne( state, pbuf, ram1, fricvel, ztodt, aerdepdrycw ) ! pbuf:inout, aerdepdrycw:out
 
        !---------------------------------------------------------------
        ! Interstitial aerosols
@@ -2299,10 +2297,10 @@ subroutine tphysbc (ztodt,                          &
     end select 
 
     ! Always need to associate pointer vlc_trb, because it needs to be passed
-    ! to microp_aero_run and eventually to dropmixnuc.
+    ! to microp_aero_run and eventually to dropmixnuc. Note vlc_trb = 0 if cflx_cpl_opt = 1-4 or 40.
 
     call pbuf_get_field(pbuf, pbuf_get_index('AMODETBV'),    vlc_trb )
-    !-----
+    !----------------------------
 
     if (pergro_test_active) then 
        !call outfld calls
@@ -2783,7 +2781,8 @@ end if
                call outfld( 'airFV', fricvel(:), pcols, lchnk )
 
             else
-            ! Since the wet sizes of lognormal modes have not been calculated yet,
+            ! If this is the first time step,
+            ! since the wet sizes of lognormal modes have not been calculated yet,
             ! we cannot yet calculate either the gravitational settling velocities
             ! or the turbulent dry deposition velocities for interstitial aerosols.
             ! Set both to zero. (Note: We could calculate water uptake here 

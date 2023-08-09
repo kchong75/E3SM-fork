@@ -16,7 +16,8 @@ module modal_aero_grav_setl
 contains
 
   !=======================================================================================
-  ! Purpose: parameterization of gravitational settling of interstitial aerosol particles.
+  ! Purpose: for interstitial aerosols, calculate the mixing ratio tendencies caused by
+  ! gravitational settling.
   !=======================================================================================
   subroutine interstitial_aero_grav_setl_tend( state, pbuf, dt, aerdepdryis_grav, vlc_grv_out, ptend )
 
