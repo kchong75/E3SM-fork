@@ -1,0 +1,347 @@
+\documentclass[12pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{hyperref}
+
+\renewcommand{\arraystretch}{2.7}
+
+
+\usepackage{rotating}
+
+
+\title{Aerosol process coupling schemes}
+\date{}
+\begin{document}
+\maketitle
+
+
+\section{Notation}
+
+In this document, we use $q$ to denote the mixing ratio of an aerosol ``species'' describing the abundance of aerosol mass or particle number in the atmosphere. In EAM, the aerosol mixing ratios are defined with respect to the mass of dry air. Therefore,
+\begin{itemize}
+    \item An aerosol mass mixing ratio is the mass of an aerosol species (e.g., dust or sulfate) present in a kilogram of dry air (unit: kg/kg).
+    \item An aerosol number mixing ratio is the number of aerosol particles present in a kilogram of dry air (unit: 1/kg).
+\end{itemize}
+
+In the following, we use captical letters $A$, $B$, $C$ etc. to denote the time rates of change (i.e., tendencies) of $q$ caused by different physical processes:
+\begin{itemize}
+    \item $A$: surface emissions;
+    \item $B$: dry removal, which can be further distinguished between
+    \begin{itemize}
+        \item $B_1$, gravitational settling, and
+        \item $B_2$, turbulent dry deposition;
+    \end{itemize} 
+    \item $C$: turbulent transport (mixing).
+\end{itemize}
+
+The time evolution equation of a mixing ratio $q$ reads 
+\begin{eqnarray}
+\frac{dq}{dt} &=& A + B + C \,,\\
+&=& A + B_1 + B_2 + C \,.
+\end{eqnarray}
+
+\section{Key assumption}
+
+We assume the surface emissions are independent of aerosol mixing ratios, i.e.,
+$$\frac{dA}{dq} = 0.$$
+
+
+\section{Scheme descriptions for \sf cflx\_cpl\_opt = 1--4}
+
+This group of schemes uses the original grouping of processes in EAMv1 and v2,
+i.e., $B_1 + B_2 = B$ is treated as one process.
+The  difference among the 4 schemes is where and how the surface fluxes saved
+in the Fortran variable {\sf cam\_in\%clfx(:,2:pcnst)} are applied.
+For aerosols, these surface fluxes correspond to surface emissions.
+
+\subsection{{\sf cflx\_cpl\_opt = 1} (sequential A-B-C)}
+
+This is the original coupling scheme in EAMv1 and v2.
+To advance the model time step from $n$ to $n+1$, we use
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;  \,\,\,
+& q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\\
+%
+q^{\rm input}_{B} = q^{n+1}_{A}; \,\,\,
+& q^{\rm input}_{B} \xrightarrow{\text{apply $B$ process for duration $\Delta t$}} q^{n+1}_{B};\,\, 
+ \\
+%
+q^{\rm input}_{C} = q^{n+1}_{B};  \,\,\,
+&  q^{\rm input}_{C} \xrightarrow{\text{apply $C$ process for duration $\Delta t$}} q^{n+1}_{C};\,\,
+\\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{C} \,.
+%
+\end{align*}
+
+The local truncation error caused by process splitting is
+\begin{align}
+&\mathcal{F}_n^{(1)}\Big(q(t_n)\Big) - q(t_{n+1}) 
+= \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(+A-C) + \dfrac{dC}{dq}(A+B)\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right).
+\end{align}
+
+
+\subsection{{\sf cflx\_cpl\_opt = 2} (parallel A-B, then sequential C)}
+
+This is the revised coupling scheme discussed in our part-1 and part-2 manuscripts
+submitted to GMD (
+\href{https://egusphere.copernicus.org/preprints/2023/egusphere-2023-1330/}{egusphere-2023-1330},
+\href{https://egusphere.copernicus.org/preprints/2023/egusphere-2023-1356/}{egusphere-2023-1356}).
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t} \\
+%
+q^{\rm input}_{B} = q^n;\,\,\, 
+& q^{\rm input}_{B} \xrightarrow{\text{apply $B$ process for duration $\Delta t$}} q^{n+1}_{B};\,\, 
+\text{let}\,\, {B}^* = \dfrac{q^{n+1}_{B} - q^{\rm input}_{B}}{\Delta t} \\
+%
+q^{\rm input}_{C} = q^n + \Delta t\big({A}^* + {B}^*\big);\,\,\, 
+& q^{\rm input}_{C}\xrightarrow{\text{apply $C$ process for duration $\Delta t$}} q^{n+1}_{C};\,\, 
+ \\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{C} \,.
+\end{align*}
+
+The local truncation error caused by process splitting is
+\begin{align}
+&\mathcal{F}_n^{(2)}\Big(q(t_n)\Big) - q(t_{n+1}) 
+= \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}(A+B)\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right).
+\end{align}
+
+
+\subsection{{\sf cflx\_cpl\_opt = 3} (first B, then sequential A and C with A dribbled)}
+
+Note that in EAM, the turbulent transport/mixing of aerosol particles, $C$, is treated together with
+aerosol activation, and the calculations are placed inside the cloud macro-microphysics subcycle,
+after CLUBB and before cloud microphysics.
+We use $M$ to denote the number of cloud macro-microphysics subycles used per time step of $A$ and $B$.
+Then this coupling scheme can be described as
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t} \\
+%
+q^{\rm input}_{B} = q^n;\,\,\, 
+& q^{\rm input}_{B} \xrightarrow{\text{apply $B$ process for duration $\Delta t$}} q^{n+1}_{B};\,\, 
+\text{let}\,\, {B}^* = \dfrac{q^{n+1}_{B} - q^{\rm input}_{B}}{\Delta t} \\
+%
+q^{(0)}_{C+A} = q^n + \Delta t {B}^*;\,\,\, 
+\end{align*}
+\begin{align*}
+\text{ do i=1,M} \\
+&q^{\rm input, i}_{C} = q^{(i-1)}_{C+A} + \frac{\Delta t }{M}  {A}^*;\,\,\, 
+& q^{\rm input,i}_{C}\xrightarrow{\text{apply $C$ process for duration $\frac{\Delta t }{M} $}} q^{(i)}_{C+A};\,\, 
+\\
+\text{ end do}\quad\\
+%
+\text{Let}\,\, q^{n+1} = q^{(M)}_{C+A} \,. 
+\end{align*}
+
+The local truncation error caused by process splitting is
+\begin{align}
+&\mathcal{F}_n^{(3)}\Big(q(t_n)\Big) - q(t_{n+1}) 
+= \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}\left(\frac{A}{M}+B\right)\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right).
+\end{align}
+
+
+\subsection{{\sf cflx\_cpl\_opt = 4} (first B, then  C with A as forcing)}
+
+Mathematically, this scheme can be viewed as scheme 3 with $M\rightarrow\infty$
+if we ignore all EAM processes other than $A$, $B$, and $C$.
+This eliminates the $\frac{dC}{dq}A$ term in the leading-order local truncation error resulted from process splitting.
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t} \\
+%
+q^{\rm input}_{B} = q^n;\,\,\, 
+& q^{\rm input}_{B} \xrightarrow{\text{apply $B$ process for duration $\Delta t$}} q^{n+1}_{B};\,\, 
+\text{let}\,\, {B}^* = \dfrac{q^{n+1}_{B} - q^{\rm input}_{B}}{\Delta t} \\
+%
+q^{\rm input}_{C} = q^n + \Delta t {B}^*;\,\,\, 
+& q^{\rm input}_{C}\xrightarrow{\text{apply $C$ process for duration $\Delta t$ with $A^*$ as forcing} }q^{n+1}_{C+A};\,\, 
+\\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{C+A} \,.
+\end{align*}
+
+
+
+The local truncation error caused by process splitting is
+\begin{align}
+&\mathcal{F}_n^{(4)}\Big(q(t_n)\Big) - q(t_{n+1}) 
+= \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}B\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right).
+\end{align}
+
+
+\section{Comparing the errors in schemes 1--4}
+
+The leading-order error terms in the schemes introduced above are
+\begin{eqnarray}
+lte^{(1)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(+A-C) + \dfrac{dC}{dq}(A+B)\right]\bigg|_{q=q^n} \\
+lte^{(2)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}(A+B)\right]\bigg|_{q=q^n} \\
+lte^{(3)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}\left(\frac{A}{M}+B\right)\right]\bigg|_{q=q^n}\\
+lte^{(4)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB}{dq}(-A-C) + \dfrac{dC}{dq}(0+B)\right]\bigg|_{q=q^n}
+\end{eqnarray}
+%
+%
+Noting that $B= B_1+B_2$ and in order to facilitate comparison with the additional schemes introduced below,
+we can also write
+\begin{eqnarray}
+lte^{(1)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(+A-C) + \dfrac{dB_2}{dq}(+A-C)+ \dfrac{dC}{dq}(A+B_1+B_2)\right]\bigg|_{q=q^n} \\
+lte^{(2)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(-A-C) + \dfrac{dB_2}{dq}(-A-C)+ \dfrac{dC}{dq}(A+B_1+B_2)\right]\bigg|_{q=q^n} \\
+lte^{(3)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(-A-C) + \dfrac{dB_2}{dq}(-A-C)+ \dfrac{dC}{dq}\left(\frac{A}{M}+B_1+B_2\right)\right]\bigg|_{q=q^n}\\
+lte^{(4)}_n(q)
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(-A-C) + \dfrac{dB_2}{dq}(-A-C)+ \dfrac{dC}{dq}(0+B_1+B_2)\right]\bigg|_{q=q^n}
+\end{eqnarray}
+
+
+
+
+
+\section{Scheme descriptions for \sf cflx\_cpl\_opt = 41--44}
+
+In this group of schemes, the various physical processes are regrouped as follows   
+\begin{eqnarray}
+    \frac{dq}{dt} &=& A + B + C \\
+    &=& A + (B_1 + B_2) + C \\
+    &=& A + B_1 + \underbrace{(B_2 + C)}_{{\text{defined as }\hat{C}}} \\
+    &=& A + B_1 + \hat{C} 
+\end{eqnarray}
+%
+$\hat{C}$ and $A$ are coupled using the forcing method, with the emissions viewed as a forcing term
+in the equations of turbulent transport, like scheme 4 described above. 
+Schemes 41--44 differ in the coupling between $B_1$ and $\left(\hat{C}+A\right)$.
+
+
+\subsection{{\sf cflx\_cpl\_opt = 41} ($B_1$ first, then apply $\hat{C}$ with $A$ as forcing)}
+
+Softwarewise, this scheme keeps the ordering of code block A, code block $B_1$ and code block $\hat{C}$ in the current EAM. The scheme can be described as
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t} \\
+%
+q^{\rm input}_{B_1} = q^n;\,\,\, 
+& q^{\rm input}_{B_1} \xrightarrow{\text{apply $B_1$ process for duration $\Delta t$}} q^{n+1}_{B_1};\,\, 
+%\text{let}\,\, {B_1}^{*,0.5} = \dfrac{q^{n+1}_{B_1} - q^{\rm input}_{B_1}}{\Delta t} 
+\\
+%
+q^{\rm input}_{\hat{C}} = q^{n+1}_{B_1};\,\,\, 
+& q^{\rm input}_{\hat{C}}\xrightarrow{\text{apply $(\hat{C}+A^*)$ process for duration $\Delta t$}} q^{n+1}_{\hat{C}+A};\,\, 
+ \\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{\hat{C}+A} \,.
+\end{align*}
+
+The local truncation error caused by process splitting is
+\begin{eqnarray}
+\mathcal{F}_n^{(41)}\Big(q(t_n)\Big) - q(t_{n+1}) 
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(-A-\hat{C}) + \dfrac{d\hat{C}}{dq}B_1\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right)
+\end{eqnarray}
+
+
+
+\subsection{{\sf cflx\_cpl\_opt = 42} (first apply $\hat{C}$ with $A$ as forcing, then apply $B_1$)}
+
+Softwarewise, this scheme requires moving code block $B_1$ from its current location in EAM to after the mac-mic subcycles.
+The scheme can be describe as
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t} \\
+%
+q^{\rm input}_{\hat{C}} = q^{n};\,\,\, 
+& q^{\rm input}_{\hat{C}}\xrightarrow{\text{apply $(\hat{C}+A^*)$ process for duration $\Delta t$}} q^{n+1}_{\hat{C}+A};\,\, 
+ \\
+%
+q^{\rm input}_{B_1} = q^{n+1}_{\hat{C}+A};\,\,\, 
+& q^{\rm input}_{B_1} \xrightarrow{\text{apply $B_1$ process for duration $\Delta t$}} q^{n+1}_{B_1};\,\, 
+\\
+\text{Let}\,\, q^{n+1} = q^{n+1}_{B_1} \,.
+\end{align*}
+
+The local truncation error is similar to that of scheme 41 but has the opposite sign:
+\begin{eqnarray}
+\mathcal{F}_n^{(42)}\Big(q(t_n)\Big) - q(t_{n+1})
+&=& \dfrac{(\Delta t)^2}{2}\left[  \dfrac{dB_1}{dq}(+A+\hat{C}) - \dfrac{d\hat{C}}{dq}B_1\right]\bigg|_{q=q^n}
++\mathcal{O}\left( (\Delta t)^3\right) 
+\end{eqnarray}
+
+\subsection{{\sf cflx\_cpl\_opt = 43} (use Strang splitting between $B_1$ and $(\hat{C}+A)$ with 2 half steps of $B_1$)}
+
+The coupling is second-order under the assumption of $dA/dq=0$.
+%
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t}; \\
+%
+q^{\rm input}_{B_1} = q^n;\,\,\, 
+& q^{\rm input}_{B_1} \xrightarrow{\text{apply $B_1$ process for duration $0.5\Delta t$}} q^{n+0.5}_{B_1};\,\, 
+%\text{let}\,\, {B_1}^{*,0.5} = \dfrac{q^{n+1}_{B_1} - q^{\rm input}_{B_1}}{\Delta t} 
+\\
+%
+q^{\rm input}_{\hat{C}} = q^{n+0.5}_{B_1};\,\,\, 
+& q^{\rm input}_{\hat{C}}\xrightarrow{\text{apply $(\hat{C}+A^*)$ process for duration $\Delta t$}} q^{n+1}_{\hat{C}+A};\,\, 
+ \\
+%
+q^{\rm input}_{B_1} = q^{n+1}_{\hat{C}+A};\,\,\, 
+& q^{\rm input}_{B_1} \xrightarrow{\text{apply $B_1$ process for duration $0.5\Delta t$}} q^{n+1}_{B_1};\,\, 
+%\text{let}\,\, {B_1}^{*,0.5} = \dfrac{q^{n+1}_{B_1} - q^{\rm input}_{B_1}}{\Delta t} 
+\\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{B_1} \,.
+\end{align*}
+
+Note: the computational cost of calculating $B_1$ (gravitational settling) twice needs to be assessed.
+
+
+\subsection{{\sf cflx\_cpl\_opt = 44} (use Strang splitting between $B_1$ and $(\hat{C}+A)$ with 2 half steps of $(\hat{C}+A)$)}
+
+Like scheme 43, this coupling is also second-order under the assumption of $dA/dq=0$.
+\begin{align*}
+q^{\rm input}_{A} = q^n;\,\,\,
+&q^{\rm input}_{A} \xrightarrow{\text{apply $A$ process for duration $\Delta t$}} q^{n+1}_{A};\,\,
+\text{let}\,\, {A}^* = \dfrac{q^{n+1}_{A} - q^{\rm input}_{A}}{\Delta t}; \\
+%
+q^{\rm input}_{\hat{C}} = q^{n};\,\,\, 
+& q^{\rm input}_{\hat{C}}\xrightarrow{\text{apply $(\hat{C}+A^*)$ process for duration $0.5\Delta t$}} q^{n+0.5}_{\hat{C}+A};\,\, 
+ \\
+%
+q^{\rm input}_{B_1} = q^{n+0.5}_{\hat{C}+A};\,\,\, 
+& q^{\rm input}_{B_1} \xrightarrow{\text{apply $B_1$ process for duration $\Delta t$}} q^{n+1}_{B_1};\,\,
+\\ 
+%
+q^{\rm input}_{\hat{C}} = q^{n+1}_{B_1};\,\,\, 
+& q^{\rm input}_{\hat{C}}\xrightarrow{\text{apply $(\hat{C}+A^*)$ process for duration $0.5\Delta t$}} q^{n+1}_{\hat{C}+A};\,\, 
+\\
+%
+\text{Let}\,\, q^{n+1} = q^{n+1}_{\hat{C}+A} \,.
+\end{align*}
+
+In EAM, since $C$ is part of the mac-mic subcycles and there are 6 subcycles per $\Delta t$ in 1-degree simulations, one can view the first 3 subcycles as the first 0.5$\Delta t$ and subcyles 4-6 as the second 0.5$\Delta t$. Using this perspective, scheme 44 is implemented by applying a full $\Delta t$ worth of $B_1$ after the third mac-mic subcycle. This does not incur additional computational costs compared to EAMv1 and v2, although it does make the code look more tangled. (If efforts could be made to pack all the calculations in the original mac-mic subcycle into a subroutine and call that subroutine in {\sf tphysbc}, then the implementation of scheme 44 would look cleaner.
+
+
+
+\end{document}
