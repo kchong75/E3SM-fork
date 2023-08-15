@@ -82,6 +82,6 @@ See flow charts in [`notes/updated_drydep_output.drawio`](notes/updated_drydep_o
 
 # Run scripts
 
-
+See [scripts/](scripts)
 
 
