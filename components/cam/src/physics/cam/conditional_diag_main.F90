@@ -514,9 +514,13 @@ subroutine get_values( arrayout, varname, state, pbuf, cam_in, cam_out )
         ! pbuf
         !----------
 
-        case('PBLH')
-            idx = pbuf_get_index('pblh') ; call pbuf_get_field( pbuf, idx, ptr1d )
+        case('pblh')
+            idx = pbuf_get_index( trim(adjustl(varname)) ); call pbuf_get_field( pbuf, idx, ptr1d )
             arrayout(:,1) = ptr1d
+
+        case('tke','kvh')
+            idx = pbuf_get_index( trim(adjustl(varname)) ); call pbuf_get_field( pbuf, idx, ptr2d )
+            arrayout(:,:) = ptr2d
 
         case('CLD')
             idx = pbuf_get_index('CLD')  ; call pbuf_get_field( pbuf, idx, ptr2d )
