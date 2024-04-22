@@ -711,8 +711,9 @@ contains
                um(l) = max(ur(l),0.1_r8)
             else                                      !unstable
                zeta = max(-100._r8,min(zeta,-0.01_r8))
-               wc = beta(l)*(-grav*ustar(l)*thvstar*zii(l)/thv_g(l))**0.333_r8
-               um(l) = sqrt(ur(l)*ur(l) + wc*wc)
+               !wc = beta(l)*(-grav*ustar(l)*thvstar*zii(l)/thv_g(l))**0.333_r8
+               !um(l) = sqrt(ur(l)*ur(l) + wc*wc)
+               um(l) = max(ur(l),0.1_r8)
             end if
 
             obu(l) = zldis(l)/zeta
