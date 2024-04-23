@@ -430,6 +430,13 @@ contains
                  + (1-frac_veg_nosno(p))*(1.-emg(c))*forc_lwrad(t) &
                  + (1-frac_veg_nosno(p))*emg(c)*sb*lw_grnd &
                  + 4._r8*emg(c)*sb*t_grnd0(c)**3*tinc(c)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes1! value: ', eflx_lwrad_out(p) 
+               print *,'KC debug: ulrad(p),frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0,tinc',ulrad(p),&
+                 frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0(c),tinc(c)
+               !flush(6)
+            endif
 
             eflx_lwrad_net(p) = eflx_lwrad_out(p) - forc_lwrad(t)
             if (lun_pp%itype(l) == istsoil .or. lun_pp%itype(l) == istcrop) then
@@ -438,6 +445,12 @@ contains
             end if
          else
             eflx_lwrad_out(p) = eflx_lwrad_out(p) + eflx_lwrad_del(p)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! value: ', eflx_lwrad_out(p) 
+               print *,'KC debug: eflx_lwrad_out(p),eflx_lwrad_del(p)',eflx_lwrad_out(p),eflx_lwrad_del(p)
+               !flush(6)
+            endif
             eflx_lwrad_net(p) = eflx_lwrad_net(p) + eflx_lwrad_del(p)
             eflx_lwrad_net_u(p) = eflx_lwrad_net_u(p) + eflx_lwrad_del(p)
             eflx_lwrad_out_u(p) = eflx_lwrad_out(p)

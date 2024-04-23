@@ -109,12 +109,25 @@ contains
          albi_grc  (bounds%begg:bounds%endg,:) , &
          p2c_scale_type=unity, c2l_scale_type= urbanf, l2g_scale_type=unity)
 
+    !KC debug:
+    do g = bounds%begp,bounds%endp
+       if (eflx_lwrad_out(g) < 0._r8) then
+          print*,"KC debug: Negative eflx_lwrad value: ", eflx_lwrad_out(g)
+          !flush(6)
+       endif
+    end do
+
     call p2g(bounds, &
          eflx_lwrad_out     (bounds%begp:bounds%endp), &
          eflx_lwrad_out_grc (bounds%begg:bounds%endg), &
          p2c_scale_type=unity, c2l_scale_type= urbanf, l2g_scale_type=unity)
 
     do g = bounds%begg,bounds%endg
+       !KC debug:
+       if (eflx_lwrad_out_grc(g) < 0._r8) then
+          print*,'KC debug: Negative eflx_lwrad_grc value: ', eflx_lwrad_out_grc(g) 
+          !flush(6)
+       endif
        lnd2atm_vars%t_rad_grc(g) = sqrt(sqrt(eflx_lwrad_out_grc(g)/sb))
     end do
     end associate

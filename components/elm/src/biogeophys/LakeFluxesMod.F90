@@ -602,6 +602,12 @@ contains
          ! What is tgbef doing in this equation? Can't it be exact now? --Zack Subin, 4/14/09
 
          eflx_lwrad_out(p) = (1._r8-emg_lake)*forc_lwrad(t) + emg_lake*sb*t_grnd(c)**4._r8
+         !KC debug:
+         if (eflx_lwrad_out(p) < 0._r8) then
+            print *,'KC debug: Negative eflx_lwrad in LakeFluxes! value: ', eflx_lwrad_out(p) 
+            print *,'KC debug: emg_lake, forc_lwrad(t), sb, t_grnd(c): ',emg_lake,forc_lwrad(t),sb, t_grnd(c)
+            !flush(6)
+         endif
 
          ! Ground heat flux
 
