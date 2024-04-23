@@ -262,6 +262,12 @@ contains
 
          if (ctype(c) == icol_roof) then
             eflx_lwrad_out(p) = lwup_roof(l)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in UrbanRadiation1! value: ', eflx_lwrad_out(p)
+               print *,'KC debug: lwup_roof(l)',lwup_roof(l)
+               !flush(6)
+            endif
             eflx_lwrad_net(p) = lwnet_roof(l)
             eflx_lwrad_net_u(p) = lwnet_roof(l)
             sabg(p) = sabs_roof_dir(l,1)*forc_solad(t,1) + &
@@ -271,6 +277,12 @@ contains
 
          else if (ctype(c) == icol_sunwall) then
             eflx_lwrad_out(p)   = lwup_sunwall(l)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in UrbanRadiation2! value: ', eflx_lwrad_out(p)
+               print *,'KC debug: lwup_sunwall(l)',lwup_sunwall(l)
+               !flush(6)
+            endif
             eflx_lwrad_net(p)   = lwnet_sunwall(l)
             eflx_lwrad_net_u(p) = lwnet_sunwall(l)
             sabg(p) = sabs_sunwall_dir(l,1)*forc_solad(t,1) + &
@@ -280,6 +292,12 @@ contains
 
          else if (ctype(c) == icol_shadewall) then
             eflx_lwrad_out(p)   = lwup_shadewall(l)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in UrbanRadiation3! value: ', eflx_lwrad_out(p)
+               print *,'KC debug: lwup_shadewall(l)',lwup_shadewall(l)
+               !flush(6)
+            endif
             eflx_lwrad_net(p)   = lwnet_shadewall(l)
             eflx_lwrad_net_u(p) = lwnet_shadewall(l)
             sabg(p) = sabs_shadewall_dir(l,1)*forc_solad(t,1) + &
@@ -289,6 +307,12 @@ contains
 
          else if (ctype(c) == icol_road_perv) then
             eflx_lwrad_out(p)   = lwup_perroad(l)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in UrbanRadiation4! value: ', eflx_lwrad_out(p)
+               print *,'KC debug: lwup_perroad(l)',lwup_perroad(l)
+               !flush(6)
+            endif
             eflx_lwrad_net(p)   = lwnet_perroad(l)
             eflx_lwrad_net_u(p) = lwnet_perroad(l)
             sabg(p) = sabs_perroad_dir(l,1)*forc_solad(t,1) + &
@@ -298,6 +322,12 @@ contains
 
          else if (ctype(c) == icol_road_imperv) then
             eflx_lwrad_out(p)   = lwup_improad(l)
+            !KC debug:
+            if (eflx_lwrad_out(p) < 0._r8) then
+               print *,'KC debug: Negative eflx_lwrad in UrbanRadiation5! value: ', eflx_lwrad_out(p)
+               print *,'KC debug: lwup_improad(l)',lwup_improad(l)
+               !flush(6)
+            endif
             eflx_lwrad_net(p)   = lwnet_improad(l)
             eflx_lwrad_net_u(p) = lwnet_improad(l)
             sabg(p) = sabs_improad_dir(l,1)*forc_solad(t,1) + &
