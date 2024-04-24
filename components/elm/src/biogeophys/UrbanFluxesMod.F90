@@ -191,7 +191,7 @@ contains
     !
     real(r8), parameter :: lapse_rate = 0.0098_r8 ! Dry adiabatic lapse rate (K/m)
     real(r8), parameter :: dtaumin = 0.01_r8      ! max limit for stress convergence [Pa]
-    integer, parameter  :: itmin = 3              ! minimum number of iterations
+    integer, parameter  :: itmin = 30             ! minimum number of iterations
     integer, parameter  :: itmax = 30             ! maximum number of iterations
     integer  :: loopmax                           ! bound for iteration loop
     real(r8) :: wind_speed0(bounds%begl:bounds%endl) ! Wind speed from atmosphere at start of iteration

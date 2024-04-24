@@ -77,7 +77,7 @@ contains
     real(r8), pointer :: z0hg_col(:)               ! roughness length over ground, sensible heat [m]
     real(r8), pointer :: z0qg_col(:)               ! roughness length over ground, latent heat [m]
     real(r8), parameter :: dtaumin = 0.01_r8       ! max limit for stress convergence [Pa]
-    integer, parameter  :: itmax_expl = 4          ! maximum number of iterations with no tau update
+    integer, parameter  :: itmax_expl = 30         ! maximum number of iterations with no tau update
     integer, parameter  :: itmax_impl = 30         ! maximum number of iterations with tau update
     real(r8), parameter :: beta1 = 1._r8           ! coefficient of convective velocity (in computing W_*) [-]
     real(r8), parameter :: zii = 1000._r8          ! convective boundary height [m]
