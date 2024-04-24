@@ -65,7 +65,7 @@ contains
     !
     ! !LOCAL VARIABLES:
     real(r8), parameter :: dtaumin = 0.01_r8     ! max limit for stress convergence [Pa]
-    integer, parameter  :: itmin = 30            ! minimum number of iterations
+    integer, parameter  :: itmin = 3             ! minimum number of iterations
     integer, parameter  :: itmax = 30            ! maximum number of iterations
     integer  :: p,c,t,g,f,j,l                    ! indices
     integer  :: filterp(bounds%endp-bounds%begp+1) ! patch filter for vegetated patches
