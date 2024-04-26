@@ -182,7 +182,17 @@ contains
          endif
 
          tinc(c) = t_grnd(c) - t_grnd0(c)
-
+         !KC debug:
+         if (tinc(c) < -30._r8) then
+            print *,'KC debug: Too small tinc value in SoilflxMod: tinc, t_grnd, tgrnd0: ',tinc(c),t_grnd(c),t_grnd0(c) 
+            print *,'KC debug: frac_h2osfc, t_h2osfc_bef,tssbef(1): ',frac_h2osfc(c),t_h2osfc_bef(c),tssbef(c,1)
+            if (col_pp%snl(c) < 0) then
+               print*,'KC debug: small tinc snl: ',frac_sno_eff(c),tssbef(c,col_pp%snl(c)+1)
+            else
+               print*,'KC debug: small tinc nonsnl!'
+            endif
+            print *,'KC debug: small tinc check: col_pp%snl, tssbef, t_h2osfc_bef, frac_h2osfc,: ',tinc(c),t_grnd(c),t_grnd0(c) 
+         endif
          ! Determine ratio of topsoil_evap_tot
 
          egsmax(c) = (h2osoi_ice(c,j)+h2osoi_liq(c,j)) / dtime
@@ -449,6 +459,7 @@ contains
             if (eflx_lwrad_out(p) < 0._r8) then
                print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! value: ', eflx_lwrad_out(p) 
                print *,'KC debug: eflx_lwrad_out(p),eflx_lwrad_del(p)',eflx_lwrad_out(p),eflx_lwrad_del(p)
+               print *,'KC debug: soflx2: eflx_del calc:',emg(c),sb,t_grnd0(c),tinc(c)
                !flush(6)
             endif
             eflx_lwrad_net(p) = eflx_lwrad_net(p) + eflx_lwrad_del(p)
