@@ -653,6 +653,11 @@ contains
                t_grnd(c) = t_soisno(c,1)
             end if
          endif
+         !KC debug:
+         if (c == 112275) then
+            print *, 'At c=112275 in soiltemp 0: eflx_sh_grnd,t_grnd,t_h2osfc,t_soisno(c,1),hs_soil,hs_h2osfc',&
+              eflx_sh_grnd(230898),t_grnd(c),t_h2osfc(c),t_soisno(c,1),hs_soil(c),hs_h2osfc(c)
+         endif
       end do
 
       ! Initialize soil heat content
@@ -1831,6 +1836,11 @@ contains
                   ! separate surface fluxes for soil/snow
                   hs_soil(c) = hs_soil(c) + eflx_gnet_soil * veg_pp%wtcol(p)
                   hs_h2osfc(c) = hs_h2osfc(c) + eflx_gnet_h2osfc * veg_pp%wtcol(p)
+                  !!KC debug:
+                  !if (p == 230898) then
+                  !   print *, 'At p=230898: in soiltemp 1: p,c,eflx_sh_grnd,hs_soil,hs_h2osfc',p,&
+                  !     c,eflx_sh_grnd(p),hs_soil(c),hs_h2osfc(c)
+                  !endif
 
                end if
             end if
