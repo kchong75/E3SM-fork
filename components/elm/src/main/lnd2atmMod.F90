@@ -112,7 +112,7 @@ contains
     !KC debug:
     do g = bounds%begp,bounds%endp
        if (eflx_lwrad_out(g) < 0._r8) then
-          print*,"KC debug: Negative eflx_lwrad value in lnd2atm: ", eflx_lwrad_out(g)
+          print*,"KC debug: Negative eflx_lwrad value in lnd2atm at p = ",g, eflx_lwrad_out(g)
           !flush(6)
        endif
     end do
@@ -125,7 +125,7 @@ contains
     do g = bounds%begg,bounds%endg
        !KC debug:
        if (eflx_lwrad_out_grc(g) < 0._r8) then
-          print*,'KC debug: Negative eflx_lwrad_grc value in lnd2atm: ', eflx_lwrad_out_grc(g) 
+          print*,'KC debug: Negative eflx_lwrad_grc value in lnd2atm at g = ', g,eflx_lwrad_out_grc(g) 
           !flush(6)
        endif
        lnd2atm_vars%t_rad_grc(g) = sqrt(sqrt(eflx_lwrad_out_grc(g)/sb))
