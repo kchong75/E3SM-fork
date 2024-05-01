@@ -15,7 +15,7 @@ module SoilFluxesMod
   use CanopyStateType   , only : canopystate_type
   use EnergyFluxType    , only : energyflux_type
   use SolarAbsorbedType , only : solarabs_type
-  use TopounitDataType  , only : top_af
+  use TopounitDataType  , only : top_as,top_af
   use LandunitType	   , only : lun_pp
   use ColumnType	      , only : col_pp
   use ColumnDataType    , only : col_es, col_ef, col_ws
@@ -186,12 +186,12 @@ contains
          if (tinc(c) < -30._r8) then
             print *,'KC debug: Too small tinc value in SoilflxMod: tinc, t_grnd, tgrnd0: ',tinc(c),t_grnd(c),t_grnd0(c) 
             print *,'KC debug: frac_h2osfc, t_h2osfc_bef,tssbef(1): ',frac_h2osfc(c),t_h2osfc_bef(c),tssbef(c,1)
+            !print *,'KC debug: col_pp%snl, frac_h2osfc,: ',col_pp%snl,frac_h2osfc(c)
             if (col_pp%snl(c) < 0) then
-               print*,'KC debug: small tinc snl: ',frac_sno_eff(c),tssbef(c,col_pp%snl(c)+1)
+               print*,'KC debug: Too small tinc snl: ',frac_sno_eff(c),tssbef(c,col_pp%snl(c)+1)
             else
-               print*,'KC debug: small tinc nonsnl!'
+               print*,'KC debug: Too small tinc nonsnl!'
             endif
-            print *,'KC debug: small tinc check: col_pp%snl, tssbef, t_h2osfc_bef, frac_h2osfc,: ',tinc(c),t_grnd(c),t_grnd0(c) 
          endif
          ! Determine ratio of topsoil_evap_tot
 
@@ -217,6 +217,10 @@ contains
          c = veg_pp%column(p)
          eflx_sh_grnd(p) = eflx_sh_grnd(p) + tinc(c)*cgrnds(p)
          qflx_evap_soi(p) = qflx_evap_soi(p) + tinc(c)*cgrndl(p)
+         !KC debug:
+         if (p == 230898) then
+            print *, 'At p=230898: in soilfluxes aft: eflx_sh_grnd,tinc',eflx_sh_grnd(p),tinc(c)
+         endif
 
          ! set ev_snow, ev_soil for urban landunits here
          l = veg_pp%landunit(p)
@@ -285,6 +289,10 @@ contains
             qflx_ev_soil(p) = qflx_ev_soil(p) * egirat(c)
             qflx_ev_h2osfc(p) = qflx_ev_h2osfc(p) * egirat(c)
          end if
+         !KC debug:
+         if (p == 230898) then
+            print *, 'At p=230898: in soilfluxes 3: eflx_sh_grnd,tinc',eflx_sh_grnd(p),tinc(c)
+         endif
 
          ! Ground heat flux
 
@@ -441,9 +449,16 @@ contains
                  + (1-frac_veg_nosno(p))*emg(c)*sb*lw_grnd &
                  + 4._r8*emg(c)*sb*t_grnd0(c)**3*tinc(c)
             !KC debug:
+            if (p == 230898) then
+               print *, 'At p=230898: p,c,t',p,c,t
+               print *, 'At p=230898: eflx_lwrad_out(p),eflx_sh_grnd(p),ulrad(p)',eflx_lwrad_out(p),eflx_sh_grnd(p),ulrad(p)
+               print *, 'At p=230898: t_grnd(c),t_grnd0(c),tinc(c)',t_grnd(c),t_grnd0(c),tinc(c)
+               print *, 'At p=230898: forc_lwrad(t),forc_u(t),forc_v(t)',forc_lwrad(t),top_as%ubot(t),top_as%vbot(t)
+            endif
+            !KC debug:
             if (eflx_lwrad_out(p) < 0._r8) then
-               print *,'KC debug: Negative eflx_lwrad in SoilFluxes1! value: ', eflx_lwrad_out(p) 
-               print *,'KC debug: ulrad(p),frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0,tinc',ulrad(p),&
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes1! p,value: ', p,eflx_lwrad_out(p) 
+               print *,'KC debug: soflx1: eflx_sh_grnd(p),ulrad(p),frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0,tinc',eflx_sh_grnd(p),ulrad(p),&
                  frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0(c),tinc(c)
                !flush(6)
             endif
@@ -457,8 +472,8 @@ contains
             eflx_lwrad_out(p) = eflx_lwrad_out(p) + eflx_lwrad_del(p)
             !KC debug:
             if (eflx_lwrad_out(p) < 0._r8) then
-               print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! value: ', eflx_lwrad_out(p) 
-               print *,'KC debug: eflx_lwrad_out(p),eflx_lwrad_del(p)',eflx_lwrad_out(p),eflx_lwrad_del(p)
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! p,value: ', p,eflx_lwrad_out(p) 
+               print *,'KC debug: soflx2: eflx_sh_grnd(p),eflx_lwrad_del(p)',eflx_sh_grnd(p),eflx_lwrad_del(p)
                print *,'KC debug: soflx2: eflx_del calc:',emg(c),sb,t_grnd0(c),tinc(c)
                !flush(6)
             endif

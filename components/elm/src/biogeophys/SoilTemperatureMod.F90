@@ -653,6 +653,11 @@ contains
                t_grnd(c) = t_soisno(c,1)
             end if
          endif
+         !KC debug:
+         if (c == 112275) then
+            print *, 'At c=112275 in soiltemp 0: eflx_sh_grnd,t_grnd,t_h2osfc,t_soisno(c,1),hs_soil,hs_h2osfc',&
+              eflx_sh_grnd(230898),t_grnd(c),t_h2osfc(c),t_soisno(c,1),hs_soil(c),hs_h2osfc(c)
+         endif
       end do
 
       ! Initialize soil heat content
