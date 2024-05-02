@@ -161,9 +161,6 @@ contains
          eflx_lh_grnd            => veg_ef%eflx_lh_grnd      , & ! Output: [real(r8) (:)   ]  ground evaporation heat flux (W/m**2) [+ to atm]
          errsoi_col              => col_ef%errsoi              , & ! Output: [real(r8) (:)   ]  column-level soil/lake energy conservation error (W/m**2)
          errsoi_patch            => veg_ef%errsoi              & ! Output: [real(r8) (:)   ]  pft-level soil/lake energy conservation error (W/m**2)
-         !KC debug
-         forc_u           =>    top_as%ubot                           , & ! Input:  [real(r8) (:)   ]  atmospheric wind speed in east direction (m/s)
-         forc_v           =>    top_as%vbot                           , & ! Input:  [real(r8) (:)   ]  atmospheric wind speed in north direction (m/s)
          )
 
          dtime = dtime_mod
@@ -460,12 +457,12 @@ contains
                print *, 'At p=230898: p,c,t',p,c,t
                print *, 'At p=230898: eflx_lwrad_out(p),eflx_sh_grnd(p),ulrad(p)',eflx_lwrad_out(p),eflx_sh_grnd(p),ulrad(p)
                print *, 'At p=230898: t_grnd(c),t_grnd0(c),tinc(c)',t_grnd(c),t_grnd0(c),tinc(c)
-               print *, 'At p=230898: forc_lwrad(t),forc_u(t),forc_v(t)',forc_lwrad(t),forc_u(t),forc_v(t)
+               print *, 'At p=230898: forc_lwrad(t),forc_u(t),forc_v(t)',forc_lwrad(t),top_as%ubot(t),top_as%vbot(t)
             endif
             !KC debug:
             if (eflx_lwrad_out(p) < 0._r8) then
-               print *,'KC debug: Negative eflx_lwrad in SoilFluxes1! value: ', eflx_lwrad_out(p) 
-               print *,'KC debug: ulrad(p),frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0,tinc',ulrad(p),&
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes1! p,value: ', p,eflx_lwrad_out(p) 
+               print *,'KC debug: soflx1: eflx_sh_grnd(p),ulrad(p),frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0,tinc',eflx_sh_grnd(p),ulrad(p),&
                  frac_veg_nosno(p),emg(c),forc_lwrad(t),sb,lw_grnd,t_grnd0(c),tinc(c)
                !flush(6)
             endif
@@ -479,8 +476,8 @@ contains
             eflx_lwrad_out(p) = eflx_lwrad_out(p) + eflx_lwrad_del(p)
             !KC debug:
             if (eflx_lwrad_out(p) < 0._r8) then
-               print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! value: ', eflx_lwrad_out(p) 
-               print *,'KC debug: eflx_lwrad_out(p),eflx_lwrad_del(p)',eflx_lwrad_out(p),eflx_lwrad_del(p)
+               print *,'KC debug: Negative eflx_lwrad in SoilFluxes2! p,value: ', p,eflx_lwrad_out(p) 
+               print *,'KC debug: soflx2: eflx_sh_grnd(p),eflx_lwrad_del(p)',eflx_sh_grnd(p),eflx_lwrad_del(p)
                print *,'KC debug: soflx2: eflx_del calc:',emg(c),sb,t_grnd0(c),tinc(c)
                !flush(6)
             endif
