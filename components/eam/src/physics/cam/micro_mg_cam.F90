@@ -312,15 +312,6 @@ subroutine micro_mg_cam_readnl(nlfile)
 
      ! Verify that version numbers are valid.
      select case (micro_mg_version)
-     case (1)
-        select case (micro_mg_sub_version)
-        case(0)
-           ! MG version 1.0
-        case(5)
-           ! MG version 1.5 - MG2 development
-        case default
-           call bad_version_endrun()
-        end select
      case (2)
         select case (micro_mg_sub_version)
         case(0)
@@ -347,9 +338,9 @@ subroutine micro_mg_cam_readnl(nlfile)
                 &to valid values")
         end if
      end if
-  end if
+  end if !masterproc
 
-#ifdef SPMD
+ #ifdef SPMD
   ! Broadcast namelist variables
   call mpibcast(micro_mg_version,            1, mpiint, 0, mpicom)
   call mpibcast(micro_mg_sub_version,        1, mpiint, 0, mpicom)
@@ -370,9 +361,9 @@ subroutine micro_mg_cam_readnl(nlfile)
   call mpibcast(micro_mg_mass_gradient_alpha, 1, mpir8, 0, mpicom)
   call mpibcast(micro_mg_mass_gradient_beta, 1, mpir8,  0, mpicom)
 
-#endif
+ #endif
 
-contains
+ contains
 
   subroutine bad_version_endrun
     ! Endrun wrapper with a more useful error message.
@@ -667,36 +658,6 @@ subroutine micro_mg_cam_init(pbuf2d)
    end if
 
    select case (micro_mg_version)
-   case (1)
-      ! Set constituent number for later loops.
-      ncnst = 4
-
-      select case (micro_mg_sub_version)
-      case (0)
-         ! MG 1 does not initialize micro_mg_utils, so have to do it here.
-         call micro_mg_utils_init(r8, rh2o, cpair, tmelt, latvap, latice, &
-              micro_mg_dcs, ice_sed_ai, errstring)
-         call handle_errmsg(errstring, subname="micro_mg_utils_init")
-
-         call micro_mg_init1_0( &
-              r8, gravit, rair, rh2o, cpair, &
-              rhoh2o, tmelt, latvap, latice, &
-              rhmini, micro_mg_dcs, micro_mg_dcs_tdep, use_hetfrz_classnuc, &
-              micro_mg_precip_frac_method, micro_mg_berg_eff_factor, errstring)
-      case (5)
-         ! MG 1 does not initialize micro_mg_utils, so have to do it here.
-         call micro_mg_utils_init(r8, rh2o, cpair, tmelt, latvap, latice, &
-              micro_mg_dcs, ice_sed_ai, errstring)
-         call handle_errmsg(errstring, subname="micro_mg_utils_init")
-
-         call micro_mg_init1_5( &
-              r8, gravit, rair, rh2o, cpair, &
-              tmelt, latvap, latice, rhmini, &
-              micro_mg_dcs,                  &
-              micro_mg_dcs_tdep,             &
-              microp_uniform, do_cldice, use_hetfrz_classnuc, &
-              micro_mg_precip_frac_method, micro_mg_berg_eff_factor, errstring)
-      end select
    case (2)
       ! Set constituent number for later loops.
       ncnst = 8
@@ -709,18 +670,19 @@ subroutine micro_mg_cam_init(pbuf2d)
               micro_mg_dcs,                  &
               micro_mg_dcs_tdep,             &
               microp_uniform, do_cldice, use_hetfrz_classnuc, &
-	      do_nccons, do_nicons, nccons, nicons, mincdnc, &
+	           do_nccons, do_nicons, nccons, nicons, mincdnc, &
               micro_mg_precip_frac_method, micro_mg_berg_eff_factor, &
               allow_sed_supersat, ice_sed_ai, prc_coef1_in,prc_exp_in, &
               prc_exp1_in, cld_sed_in, mg_prc_coeff_fix_in, &
               micro_mg_mass_gradient_alpha, micro_mg_mass_gradient_beta, &
-              errstring)
+              errstring
+         )
       end select
    end select
 
    call handle_errmsg(errstring, subname="micro_mg_init")
 
-   ! Register history variables
+  ! Register history variables
    do m = 1, ncnst
       call cnst_get_ind(cnst_names(m), mm)
       if ( any(mm == (/ ixcldliq, ixcldice, ixrain, ixsnow /)) ) then
@@ -901,8 +863,8 @@ subroutine micro_mg_cam_init(pbuf2d)
    if (.not. (micro_mg_version == 1 .and. micro_mg_sub_version == 0)) then
       call addfld('QCRAT', (/ 'lev' /), 'A', 'fraction', 'Qc Limiter: Fraction of qc tendency applied')
    end if
-
-   ! determine the add_default fields
+  ! End register history variables
+  ! determine the add_default fields
    call phys_getopts(history_amwg_out           = history_amwg         , &
                      history_verbose_out        = history_verbose      , &
                      history_budget_out         = history_budget       , &
@@ -992,8 +954,8 @@ subroutine micro_mg_cam_init(pbuf2d)
       end if
 
    end if
-
-   ! physics buffer indices
+  ! End determine the add_default fields
+  ! physics buffer indices
    ast_idx      = pbuf_get_index('AST')
    cld_idx      = pbuf_get_index('CLD')
    concld_idx   = pbuf_get_index('CONCLD')
@@ -1019,12 +981,13 @@ subroutine micro_mg_cam_init(pbuf2d)
    nrain_idx    = pbuf_get_index('NRAIN', ierr)
    nsnow_idx    = pbuf_get_index('NSNOW', ierr)
 
-  ! fields for heterogeneous freezing
-  frzimm_idx = pbuf_get_index('FRZIMM', ierr)
-  frzcnt_idx = pbuf_get_index('FRZCNT', ierr)
-  frzdep_idx = pbuf_get_index('FRZDEP', ierr)
+   ! fields for heterogeneous freezing
+   frzimm_idx = pbuf_get_index('FRZIMM', ierr)
+   frzcnt_idx = pbuf_get_index('FRZCNT', ierr)
+   frzdep_idx = pbuf_get_index('FRZDEP', ierr)
+  ! End physics buffer indices
 
-  ! Initialize physics buffer grid fields for accumulating precip and condensation
+   ! Initialize physics buffer grid fields for accumulating precip and condensation
    if (is_first_step()) then
       call pbuf_set_field(pbuf2d, cldo_idx,   0._r8)
       call pbuf_set_field(pbuf2d, cc_t_idx,   0._r8)
@@ -1377,10 +1340,10 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    real(r8), pointer :: CC_ni(:,:)        ! Grid-mean microphysical tendency
    real(r8), pointer :: CC_qlst(:,:)      ! In-liquid stratus microphysical tendency
 
-  ! variables for heterogeneous freezing
-  real(r8), pointer :: frzimm(:,:)
-  real(r8), pointer :: frzcnt(:,:)
-  real(r8), pointer :: frzdep(:,:)
+   ! variables for heterogeneous freezing
+   real(r8), pointer :: frzimm(:,:)
+   real(r8), pointer :: frzcnt(:,:)
+   real(r8), pointer :: frzdep(:,:)
 
    real(r8), pointer :: qme(:,:)
 
@@ -1586,7 +1549,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    ! Set the col_type flag to grid or subcolumn dependent on the value of use_subcol_microp
    call pbuf_col_type_index(use_subcol_microp, col_type=col_type)
 
-   !-----------------------
+  !!-----------------------
    ! These physics buffer fields are read only and not set in this parameterization
    ! If these fields do not have subcolumn data, copy the grid to the subcolumn if subcolumns is turned on
    ! If subcolumns is not turned on, then these fields will be grid data
@@ -1607,22 +1570,22 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    call pbuf_get_field(pbuf, ast_idx,         ast,     start=(/1,1,itim_old/), kount=(/psetcols,pver,1/), &
         col_type=col_type, copy_if_needed=use_subcol_microp)
 
-   if (.not. do_cldice) then
+   if (.not. do_cldice) then !KC: micro_mg_do_cldice=T (seems so)
       call pbuf_get_field(pbuf, tnd_qsnow_idx,   tnd_qsnow,   col_type=col_type, copy_if_needed=use_subcol_microp)
       call pbuf_get_field(pbuf, tnd_nsnow_idx,   tnd_nsnow,   col_type=col_type, copy_if_needed=use_subcol_microp)
       call pbuf_get_field(pbuf, re_ice_idx,      re_ice,      col_type=col_type, copy_if_needed=use_subcol_microp)
    end if
 
-   if (use_hetfrz_classnuc) then
+   if (use_hetfrz_classnuc) then !KC: use_hetfrz_classnuc=T
       call pbuf_get_field(pbuf, frzimm_idx, frzimm, col_type=col_type, copy_if_needed=use_subcol_microp)
       call pbuf_get_field(pbuf, frzcnt_idx, frzcnt, col_type=col_type, copy_if_needed=use_subcol_microp)
       call pbuf_get_field(pbuf, frzdep_idx, frzdep, col_type=col_type, copy_if_needed=use_subcol_microp)
    end if
 
-   !-----------------------
-   ! These physics buffer fields are calculated and set in this parameterization
-   ! If subcolumns is turned on, then these fields will be calculated on a subcolumn grid, otherwise they will be a normal grid
-
+  !!-----------------------
+  !! These physics buffer fields are calculated and set in this parameterization
+  !! If subcolumns is turned on, then these fields will be calculated on a subcolumn grid, otherwise they will be a normal grid
+  !
    call pbuf_get_field(pbuf, prec_str_idx,    prec_str,    col_type=col_type)
    call pbuf_get_field(pbuf, snow_str_idx,    snow_str,    col_type=col_type)
    call pbuf_get_field(pbuf, prec_pcw_idx,    prec_pcw,    col_type=col_type)
@@ -1668,8 +1631,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    if (qsnow_idx > 0) call pbuf_get_field(pbuf, qsnow_idx, qsout_grid_ptr)
    if (nrain_idx > 0) call pbuf_get_field(pbuf, nrain_idx, nrout_grid_ptr)
    if (nsnow_idx > 0) call pbuf_get_field(pbuf, nsnow_idx, nsout_grid_ptr)
-
-   !-----------------------
+  !!---------------End pbuf calc and set in MG-------
+  
+  !!-----------------------
    ! If subcolumns is turned on, all calculated fields which are on subcolumns
    ! need to be retrieved on the grid as well for storing averaged values
 
@@ -1716,7 +1680,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
 
    end if
 
-   !-----------------------
+  !!-----------------------
    ! These are only on the grid regardless of whether subcolumns are turned on or not
    call pbuf_get_field(pbuf, ls_reffrain_idx, mgreffrain_grid)
    call pbuf_get_field(pbuf, ls_reffsnow_idx, mgreffsnow_grid)
@@ -1726,7 +1690,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    call pbuf_get_field(pbuf, cmeliq_idx,      cmeliq_grid)
    call pbuf_get_field(pbuf, ast_idx,         ast_grid, start=(/1,1,itim_old/), kount=(/pcols,pver,1/))
    
-   !-------------------------------------------------------------------------------------
+  !!-------------------------------------------------------------------------------------
    ! Microphysics assumes 'liquid stratus frac = ice stratus frac
    !                      = max( liquid stratus frac, ice stratus frac )'.
    alst_mic => ast
@@ -1784,16 +1748,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    ! and cldice in physics_update
    call physics_ptend_init(ptend, psetcols, "cldwat_mic", ls=.true., lq=lq)
 
-   select case (micro_mg_version)
-   case (1)
-      select case (micro_mg_sub_version)
-      case (0)
-         call micro_mg_get_cols1_0(ncol, nlev, top_lev, state%q(:,:,ixcldliq), &
-              state%q(:,:,ixcldice), mgncol, mgcols)
-      case (5)
-         call micro_mg_get_cols1_5(ncol, nlev, top_lev, state%q(:,:,ixcldliq), &
-              state%q(:,:,ixcldice), mgncol, mgcols)
-      end select
+   select case (micro_mg_version) !KC: 2,0
    case (2)
       call micro_mg_get_cols2_0(ncol, nlev, top_lev, state%q(:,:,ixcldliq), &
            state%q(:,:,ixcldice), state%q(:,:,ixrain), state%q(:,:,ixsnow), &
@@ -2087,72 +2042,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
          packed_ns = packer%pack(state_loc%q(:,:,ixnumsnow))
       end if
 
-      select case (micro_mg_version)
-      case (1)
-         select case (micro_mg_sub_version)
-         case (0)
-
-            call t_startf('micro_mg_tend1')
-            call micro_mg_tend1_0( &
-                 microp_uniform, mgncol, nlev, mgncol, 1, dtime/num_steps, &
-                 packed_t, packed_q, packed_qc, packed_qi, packed_nc,     &
-                 packed_ni, packed_p, packed_pdel, packed_cldn, packed_liqcldf,&
-                 packed_relvar, packed_accre_enhan,                             &
-                 packed_icecldf, packed_rate1ord_cw2pr_st, packed_naai, packed_npccn,                 &
-                 packed_rndst, packed_nacon, packed_tlat, packed_qvlat, packed_qctend,                &
-                 packed_qitend, packed_nctend, packed_nitend, packed_rel, rel_fn_dum,      &
-                 packed_rei, packed_prect, packed_preci, packed_nevapr, packed_evapsnow, &
-                 packed_prain, packed_prodsnow, packed_cmeout, packed_dei, packed_mu,                &
-                 packed_lambdac, packed_qsout, packed_des, packed_rflx, packed_sflx,                 &
-                 packed_qrout, reff_rain_dum, reff_snow_dum, packed_qcsevap, packed_qisevap,   &
-                 packed_qvres, packed_cmei, packed_vtrmc, packed_vtrmi, packed_qcsedten,          &
-                 packed_qisedten, packed_pra, packed_prc, packed_mnuccc, packed_mnucct,          &
-                 packed_msacwi, packed_psacws, packed_bergs, packed_berg, packed_melt,          &
-                 packed_homo, packed_qcres, packed_prci, packed_prai, packed_qires,             &
-                 packed_mnuccr, packed_pracs, packed_meltsdt, packed_frzrdt, packed_mnuccd,       &
-                 packed_nrout, packed_nsout, packed_refl, packed_arefl, packed_areflz,               &
-                 packed_frefl, packed_csrfl, packed_acsrfl, packed_fcsrfl, packed_rercld,            &
-                 packed_ncai, packed_ncal, packed_qrout2, packed_qsout2, packed_nrout2,              &
-                 packed_nsout2, drout_dum, dsout2_dum, packed_freqs,packed_freqr,            &
-                 packed_nfice, packed_prer_evap, do_cldice, errstring,                      &
-                 packed_tnd_qsnow, packed_tnd_nsnow, packed_re_ice,             &
-                 packed_frzimm, packed_frzcnt, packed_frzdep)
-            call t_stopf('micro_mg_tend1')
-
-         case (5)
-
-            call t_startf('micro_mg_tend1_5')
-            call micro_mg_tend1_5( &
-                 mgncol,   nlev,     dtime/num_steps,    &
-                 packed_t,       packed_q,                     &
-                 packed_qc,      packed_qi,    &
-                 packed_nc,      packed_ni,    &
-                 packed_relvar,             packed_accre_enhan,                            &
-                 packed_p,     packed_pdel,     packed_pint,     &
-                 packed_cldn,                packed_liqcldf,           packed_icecldf,           &
-                 packed_rate1ord_cw2pr_st,           packed_naai,     packed_npccn,    packed_rndst,    packed_nacon,    &
-                 packed_tlat,     packed_qvlat,    packed_qctend,    packed_qitend,    packed_nctend,    packed_nitend,    &
-                 packed_rel,      rel_fn_dum,   packed_rei,                packed_prect,    packed_preci,    &
-                 packed_nevapr,   packed_evapsnow, packed_prain,    packed_prodsnow, packed_cmeout,   packed_dei,      &
-                 packed_mu,       packed_lambdac,  packed_qsout,    packed_des,      packed_rflx,     packed_sflx,     &
-                 packed_qrout,              reff_rain_dum,          reff_snow_dum,          &
-                 packed_qcsevap,  packed_qisevap,  packed_qvres,    packed_cmei,  packed_vtrmc,   packed_vtrmi,    &
-                 packed_qcsedten, packed_qisedten, packed_pra,     packed_prc,     packed_mnuccc,  packed_mnucct,  &
-                 packed_msacwi,  packed_psacws,  packed_bergs,   packed_berg,    packed_melt,    packed_homo,    &
-                 packed_qcres,             packed_prci,    packed_prai,    packed_qires,             &
-                 packed_mnuccr,  packed_pracs,   packed_meltsdt,  packed_frzrdt,   packed_mnuccd,            &
-                 packed_nrout,   packed_nsout,    packed_refl,     packed_arefl,    packed_areflz,   packed_frefl,    &
-                 packed_csrfl,    packed_acsrfl,   packed_fcsrfl,             packed_rercld,             &
-                 packed_ncai,     packed_ncal,     packed_qrout2,   packed_qsout2,   packed_nrout2,   packed_nsout2,   &
-                 drout_dum,   dsout2_dum,   packed_freqs,    packed_freqr,    packed_nfice,    packed_qcrat,    &
-                 errstring, &
-                 packed_tnd_qsnow,          packed_tnd_nsnow,          packed_re_ice, packed_prer_evap,             &
-                 packed_frzimm, packed_frzcnt, packed_frzdep)
-            call t_stopf('micro_mg_tend1_5')
-
-         end select
+      select case (micro_mg_version) !KC: = 2
       case(2)
-         select case (micro_mg_sub_version)
+         select case (micro_mg_sub_version)!KC: = 0
          case (0)
 
             call t_startf('micro_mg_tend2')
@@ -2164,7 +2056,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_qr,              packed_qs,              &
                  packed_nr,              packed_ns,              &
                  packed_relvar,          packed_accre_enhan,     &
-		 precip_off,                                     &
+		           precip_off,                                     &
                  packed_p,               packed_pdel,            &
                  packed_cldn,    packed_liqcldf, packed_icecldf, &
                  packed_rate1ord_cw2pr_st,                       &
@@ -2209,16 +2101,18 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_nfice,           packed_qcrat,           &
                  errstring, &
                  packed_tnd_qsnow,packed_tnd_nsnow,packed_re_ice,&
-		 packed_prer_evap,                                     &
-                 packed_frzimm,  packed_frzcnt,  packed_frzdep   )
+		           packed_prer_evap,                                     &
+                 packed_frzimm,  packed_frzcnt,  packed_frzdep   
+            ) !end of call of micro_mg_tend2_0
             call t_stopf('micro_mg_tend2')
          end select
       end select
 
       call handle_errmsg(errstring, subname="micro_mg_tend")
-
+      
+      !KC: initialize ptend_loc to 0.0
       call physics_ptend_init(ptend_loc, psetcols, "micro_mg", &
-                              ls=.true., lq=lq)
+                              ls=.true., lq=lq) !lq: changing cld/precip/
 
       ! Set local tendency.
       ptend_loc%s               = packer%unpack(packed_tlat, 0._r8)
@@ -2251,12 +2145,13 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
       call physics_ptend_sum(ptend_loc, ptend, ncol)
 
       ! Update local state
+      ! KC: limiters in physics_update; debug check implemented in there also.
       call physics_update(state_loc, ptend_loc, dtime/num_steps)
 
       ! Sum all outputs for averaging.
       call post_proc%accumulate()
 
-   end do
+   end do !end of mg sub loop
    call t_stopf('micro_mg_cam_tend_loop')
 
    call t_startf('micro_mg_cam_tend_fini')
@@ -2310,26 +2205,26 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    mgflxprc(:ncol,top_lev:pverp) = rflx(:ncol,top_lev:pverp) + sflx(:ncol,top_lev:pverp)
    mgflxsnw(:ncol,top_lev:pverp) = sflx(:ncol,top_lev:pverp)
 
-! mgflxprc and mgflxsnw are used in COSP to compulate precipitation fractional
-! area and derive precipitation (rain and snow) mixing ratios. Including iflx and cflx
-! in precipitation fluxes would result in additional effects of cloud liquid and ice 
-! on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
-! portion of calculations that are handled separately from that of cloud liquid and ice. 
-! If included, it would not exactly amount to double counting the effect of cloud liquid and ice
-! because the mixing ratio derived from iflx and cflx epected to be much smaller than
-! the actual grid-mean cldliq and cldice, and rain or snow size distribution
-! would be used to compute the lidar/radar signal strength.
-! 
-! Note that it would need to include iflx and cflx to make the values at surface interface 
-! consistent with large scale precipitation rates.
+   ! mgflxprc and mgflxsnw are used in COSP to compulate precipitation fractional
+   ! area and derive precipitation (rain and snow) mixing ratios. Including iflx and cflx
+   ! in precipitation fluxes would result in additional effects of cloud liquid and ice 
+   ! on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
+   ! portion of calculations that are handled separately from that of cloud liquid and ice. 
+   ! If included, it would not exactly amount to double counting the effect of cloud liquid and ice
+   ! because the mixing ratio derived from iflx and cflx epected to be much smaller than
+   ! the actual grid-mean cldliq and cldice, and rain or snow size distribution
+   ! would be used to compute the lidar/radar signal strength.
+   ! 
+   ! Note that it would need to include iflx and cflx to make the values at surface interface 
+   ! consistent with large scale precipitation rates.
 
-! rain and snow species.
-!
-!ADD CONDENSATE FLUXES FOR MG2 (ice and snow already added for MG1)
-!  if (micro_mg_version .ge. 2) then
-!     mgflxprc(:ncol,top_lev:pverp) = mgflxprc(:ncol,top_lev:pverp) + iflx(:ncol,top_lev:pverp) + cflx(:ncol,top_lev:pverp)
-!     mgflxsnw(:ncol,top_lev:pverp) = mgflxsnw(:ncol,top_lev:pverp) + iflx(:ncol,top_lev:pverp)
-!  end if
+   ! rain and snow species.
+   !
+   !ADD CONDENSATE FLUXES FOR MG2 (ice and snow already added for MG1)
+   !  if (micro_mg_version .ge. 2) then
+   !     mgflxprc(:ncol,top_lev:pverp) = mgflxprc(:ncol,top_lev:pverp) + iflx(:ncol,top_lev:pverp) + cflx(:ncol,top_lev:pverp)
+   !     mgflxsnw(:ncol,top_lev:pverp) = mgflxsnw(:ncol,top_lev:pverp) + iflx(:ncol,top_lev:pverp)
+   !  end if
 
    mgmrprc(:ncol,top_lev:pver) = qrout(:ncol,top_lev:pver) + qsout(:ncol,top_lev:pver)
    mgmrsnw(:ncol,top_lev:pver) = qsout(:ncol,top_lev:pver)
@@ -2451,7 +2346,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    ! ------------------------------------------------------ !
 
    ! Average the fields which are needed later in this paramterization to be on the grid
-   if (use_subcol_microp) then
+   if (use_subcol_microp) then !KC: =F
       call subcol_field_avg(prec_str,  ngrdcol, lchnk, prec_str_grid)
       call subcol_field_avg(iclwpst,   ngrdcol, lchnk, iclwpst_grid)
       call subcol_field_avg(cvreffliq, ngrdcol, lchnk, cvreffliq_grid)
@@ -2503,7 +2398,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
          call subcol_field_avg(state_loc%q(:,:,ixnumsnow), ngrdcol, lchnk, ns_grid)
       end if
 
-   else
+   else !KC: use_subcol_microp=F
       ! These pbuf fields need to be assigned.  There is no corresponding subcol_field_avg
       ! as they are reset before being used, so it would be a needless calculation
       lambdac_grid    => lambdac
@@ -2568,7 +2463,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
 
    ! If on subcolumns, average the rest of the pbuf fields which were modified on subcolumns but are not used further in
    ! this parameterization  (no need to assign in the non-subcolumn case -- the else step)
-   if (use_subcol_microp) then
+   if (use_subcol_microp) then !KC: use_subcol_microp=F
       call subcol_field_avg(snow_str,    ngrdcol, lchnk, snow_str_grid)
       call subcol_field_avg(prec_pcw,    ngrdcol, lchnk, prec_pcw_grid)
       call subcol_field_avg(snow_pcw,    ngrdcol, lchnk, snow_pcw_grid)
@@ -2686,7 +2581,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
               1.5_r8 * 1.e6_r8
       end where
 
-   else
+   else !micro_mg_version <= 1
       ! Diagnostic precipitation
 
       where (qrout_grid(:ngrdcol,top_lev:) >= 1.e-7_r8)
@@ -2802,10 +2697,10 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
          end if
 
          ! reset counters
-!        if (pe_grid(i) /= 0._r8 .and. (pe_grid(i) < 1.e-8_r8 .or. pe_grid(i) > 1.e3_r8)) then
-!           write (iulog,*) 'PE_grid:ANOMALY  pe_grid, acprecl_grid, acgcme_grid, tpr_grid, acnum_grid ', &
-!                           pe_grid(i),acprecl_grid(i), acgcme_grid(i), tpr_grid(i), acnum_grid(i)
-!        endif
+         !if (pe_grid(i) /= 0._r8 .and. (pe_grid(i) < 1.e-8_r8 .or. pe_grid(i) > 1.e3_r8)) then
+         !    write (iulog,*) 'PE_grid:ANOMALY  pe_grid, acprecl_grid, acgcme_grid, tpr_grid, acnum_grid ', &
+         !                   pe_grid(i),acprecl_grid(i), acgcme_grid(i), tpr_grid(i), acnum_grid(i)
+         !endif
 
          acprecl_grid(i) = 0._r8
          acgcme_grid(i)  = 0._r8
@@ -2853,10 +2748,10 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    if(do_aerocom_ind3) then
      autocl_idx = pbuf_get_index('autocl')
      accretl_idx = pbuf_get_index('accretl')
-!     call pbuf_set_field(pbuf, autocl_idx, prao)
-!     call pbuf_set_field(pbuf, accretl_idx, prco)
-! VPRAO and VPRCO are incorreclty defined in CAM5.3
-! Here prco is autoconverion, and prao is accrection. 
+      !     call pbuf_set_field(pbuf, autocl_idx, prao)
+      !     call pbuf_set_field(pbuf, accretl_idx, prco)
+      ! VPRAO and VPRCO are incorreclty defined in CAM5.3
+      ! Here prco is autoconverion, and prao is accrection. 
      call pbuf_set_field(pbuf, autocl_idx, prco_grid)
      call pbuf_set_field(pbuf, accretl_idx, prao_grid)
    end if
@@ -2927,11 +2822,11 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    if (nrain_idx > 0)  nrout_grid_ptr = nrout_grid
    if (nsnow_idx > 0)  nsout_grid_ptr = nsout_grid
 
-   ! --------------------------------------------- !
-   ! General outfield calls for microphysics       !
-   ! --------------------------------------------- !
+  !! --------------------------------------------- !
+  !! General outfield calls for microphysics       !
+  !! --------------------------------------------- !
 
-   ! Output a handle of variables which are calculated on the fly
+  !! Output a handle of variables which are calculated on the fly
    ftem_grid = 0._r8
 
    ftem_grid(:ngrdcol,top_lev:pver) =  qcreso_grid(:ngrdcol,top_lev:pver)
@@ -2956,8 +2851,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
 
    ftem_grid(:ngrdcol,top_lev:pver) = -prcio_grid(:ngrdcol,top_lev:pver) - praio_grid(:ngrdcol,top_lev:pver)
    call outfld( 'MPDI2P', ftem_grid, pcols, lchnk)
+  !
 
-   ! Output fields which have not been averaged already, averaging if use_subcol_microp is true
+  !! Output fields which have not been averaged already, averaging if use_subcol_microp is true
    call outfld('MPICLWPI',    iclwpi,      psetcols, lchnk, avg_subcol_field=use_subcol_microp)
    call outfld('MPICIWPI',    iciwpi,      psetcols, lchnk, avg_subcol_field=use_subcol_microp)
    call outfld('REFL',        refl,        psetcols, lchnk, avg_subcol_field=use_subcol_microp)
@@ -3014,7 +2910,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
       call outfld('FICE_SCOL',   nfice,       psubcols*pcols, lchnk)
    end if
 
-   ! Output fields which are already on the grid
+  !
+
+  !! Output fields which are already on the grid
    call outfld('QRAIN',       qrout_grid,       pcols, lchnk)
    call outfld('QSNOW',       qsout_grid,       pcols, lchnk)
    call outfld('NRAIN',       nrout_grid,       pcols, lchnk)
@@ -3072,8 +2970,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    call outfld('PRCIO',       prcio_grid,       pcols, lchnk)
    call outfld('PRAIO',       praio_grid,       pcols, lchnk)
    call outfld('QIRESO',      qireso_grid,      pcols, lchnk)
+  !
 
-   ! ptend_loc is deallocated in physics_update above
+  !! ptend_loc is deallocated in physics_update above
    call physics_state_dealloc(state_loc)
    call t_stopf('micro_mg_cam_tend_fini')
 

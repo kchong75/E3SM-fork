@@ -151,209 +151,209 @@ module micro_p3_interface
 !===============================================================================
 subroutine micro_p3_readnl(nlfile)
 
-  use namelist_utils,  only: find_group_name
-  use units,           only: getunit, freeunit
-  use mpishorthand
+   use namelist_utils,  only: find_group_name
+   use units,           only: getunit, freeunit
+   use mpishorthand
 
-  character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
+   character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
-  ! Local variables
-  integer :: unitn, ierr
-  character(len=*), parameter :: subname = 'micro_p3_cam_readnl'
+   ! Local variables
+   integer :: unitn, ierr
+   character(len=*), parameter :: subname = 'micro_p3_cam_readnl'
 
-  namelist /micro_nl/ &
-       micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
-       micro_tend_output, p3_autocon_coeff, p3_qc_autocon_expon, p3_nc_autocon_expon, p3_accret_coeff, &
-       p3_qc_accret_expon, p3_wbf_coeff, p3_max_mean_rain_size, p3_embryonic_rain_size, &
-       do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc 
+   namelist /micro_nl/ &
+         micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
+         micro_tend_output, p3_autocon_coeff, p3_qc_autocon_expon, p3_nc_autocon_expon, p3_accret_coeff, &
+         p3_qc_accret_expon, p3_wbf_coeff, p3_max_mean_rain_size, p3_embryonic_rain_size, &
+         do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc 
 
-  !-----------------------------------------------------------------------------
+   !-----------------------------------------------------------------------------
 
-  if (masterproc) then
-     unitn = getunit()
-     open( unitn, file=trim(nlfile), status='old' )
-     call find_group_name(unitn, 'micro_nl', status=ierr)
-     if (ierr == 0) then
-        read(unitn, micro_nl, iostat=ierr)
-        if (ierr /= 0) then
-           call endrun(subname // ':: ERROR reading namelist')
-        end if
-     end if
-     close(unitn)
-     call freeunit(unitn)
+   if (masterproc) then
+      unitn = getunit()
+      open( unitn, file=trim(nlfile), status='old' )
+      call find_group_name(unitn, 'micro_nl', status=ierr)
+      if (ierr == 0) then
+         read(unitn, micro_nl, iostat=ierr)
+         if (ierr /= 0) then
+            call endrun(subname // ':: ERROR reading namelist')
+         end if
+      end if
+      close(unitn)
+      call freeunit(unitn)
 
-     write(iulog,'(A50)') ' ----- P3 Namelist Values: -----'
-     write(iulog,'(A29,1x,A19)')  'micro_p3_tableversion: ',   micro_p3_tableversion
-     write(iulog,'(A20,1x,A100)') 'micro_p3_lookup_dir: ',     micro_p3_lookup_dir
-     write(iulog,'(A30,1x,L)')    'micro_aerosolactivation: ', micro_aerosolactivation
-     write(iulog,'(A30,1x,L)')    'micro_subgrid_cloud: ',     micro_subgrid_cloud
-     write(iulog,'(A30,1x,L)')    'micro_tend_output: ',       micro_tend_output
-     write(iulog,'(A30,1x,8e12.4)') 'p3_autocon_coeff',        p3_autocon_coeff
-     write(iulog,'(A30,1x,8e12.4)') 'p3_accret_coeff',         p3_accret_coeff
-     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',     p3_qc_autocon_expon
-     write(iulog,'(A30,1x,8e12.4)') 'p3_nc_autocon_expon',     p3_nc_autocon_expon
-     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',      p3_qc_accret_expon
-     write(iulog,'(A30,1x,8e12.4)') 'p3_wbf_coeff',            p3_wbf_coeff
-     write(iulog,'(A30,1x,8e12.4)') 'p3_mincdnc',              p3_mincdnc 
-     write(iulog,'(A30,1x,8e12.4)') 'p3_max_mean_rain_size',   p3_max_mean_rain_size
-     write(iulog,'(A30,1x,8e12.4)') 'p3_embryonic_rain_size',  p3_embryonic_rain_size
-     write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
-     write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
+      write(iulog,'(A50)') ' ----- P3 Namelist Values: -----'
+      write(iulog,'(A29,1x,A19)')  'micro_p3_tableversion: ',   micro_p3_tableversion
+      write(iulog,'(A20,1x,A100)') 'micro_p3_lookup_dir: ',     micro_p3_lookup_dir
+      write(iulog,'(A30,1x,L)')    'micro_aerosolactivation: ', micro_aerosolactivation
+      write(iulog,'(A30,1x,L)')    'micro_subgrid_cloud: ',     micro_subgrid_cloud
+      write(iulog,'(A30,1x,L)')    'micro_tend_output: ',       micro_tend_output
+      write(iulog,'(A30,1x,8e12.4)') 'p3_autocon_coeff',        p3_autocon_coeff
+      write(iulog,'(A30,1x,8e12.4)') 'p3_accret_coeff',         p3_accret_coeff
+      write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',     p3_qc_autocon_expon
+      write(iulog,'(A30,1x,8e12.4)') 'p3_nc_autocon_expon',     p3_nc_autocon_expon
+      write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',      p3_qc_accret_expon
+      write(iulog,'(A30,1x,8e12.4)') 'p3_wbf_coeff',            p3_wbf_coeff
+      write(iulog,'(A30,1x,8e12.4)') 'p3_mincdnc',              p3_mincdnc 
+      write(iulog,'(A30,1x,8e12.4)') 'p3_max_mean_rain_size',   p3_max_mean_rain_size
+      write(iulog,'(A30,1x,8e12.4)') 'p3_embryonic_rain_size',  p3_embryonic_rain_size
+      write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
+      write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
 
-  end if
+   end if
 
-#ifdef SPMD
-  ! Broadcast namelist variables
-  call mpibcast(micro_p3_tableversion,   len(micro_p3_tableversion), mpichar, 0, mpicom)
-  call mpibcast(micro_p3_lookup_dir,     len(micro_p3_lookup_dir),   mpichar, 0, mpicom)
-  call mpibcast(micro_aerosolactivation, 1,                          mpilog,  0, mpicom)
-  call mpibcast(micro_subgrid_cloud,     1,                          mpilog,  0, mpicom)
-  call mpibcast(micro_tend_output,       1,                          mpilog,  0, mpicom)
-  call mpibcast(p3_autocon_coeff,        1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_qc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_nc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_accret_coeff,         1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_qc_accret_expon,      1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_wbf_coeff,            1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_mincdnc,              1 ,                         mpir8,   0, mpicom) 
-  call mpibcast(p3_max_mean_rain_size,   1 ,                         mpir8,   0, mpicom)
-  call mpibcast(p3_embryonic_rain_size,  1 ,                         mpir8,   0, mpicom)
-  call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
-  call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom)
+   #ifdef SPMD
+      ! Broadcast namelist variables
+      call mpibcast(micro_p3_tableversion,   len(micro_p3_tableversion), mpichar, 0, mpicom)
+      call mpibcast(micro_p3_lookup_dir,     len(micro_p3_lookup_dir),   mpichar, 0, mpicom)
+      call mpibcast(micro_aerosolactivation, 1,                          mpilog,  0, mpicom)
+      call mpibcast(micro_subgrid_cloud,     1,                          mpilog,  0, mpicom)
+      call mpibcast(micro_tend_output,       1,                          mpilog,  0, mpicom)
+      call mpibcast(p3_autocon_coeff,        1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_qc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_nc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_accret_coeff,         1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_qc_accret_expon,      1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_wbf_coeff,            1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_mincdnc,              1 ,                         mpir8,   0, mpicom) 
+      call mpibcast(p3_max_mean_rain_size,   1 ,                         mpir8,   0, mpicom)
+      call mpibcast(p3_embryonic_rain_size,  1 ,                         mpir8,   0, mpicom)
+      call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
+      call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom)
 
-#endif
+   #endif
 
-  ! Check to make sure p3 table version is valid
-  select case (trim(micro_p3_tableversion))
-    case ('4')
-       ! Version 4 is valid
-    case ('4.1')
-      ! Version 4.1 is valid
-    case ('4.1.1')
-      ! Version 4.1.1 is valid
-    case ('4.1.2')
-      ! Version 4.1.2 is valid      
-    case default
-       print *, micro_p3_tableversion
-       call bad_version_endrun()
-  end select
+   ! Check to make sure p3 table version is valid
+   select case (trim(micro_p3_tableversion))
+      case ('4')
+         ! Version 4 is valid
+      case ('4.1')
+         ! Version 4.1 is valid
+      case ('4.1.1')
+         ! Version 4.1.1 is valid
+      case ('4.1.2')
+         ! Version 4.1.2 is valid      
+      case default
+         print *, micro_p3_tableversion
+         call bad_version_endrun()
+   end select
 
-  if (masterproc) write(iulog,'(A50)') ' ----- P3 READ NL Finshed: -----'
+   if (masterproc) write(iulog,'(A50)') ' ----- P3 READ NL Finshed: -----'
 
-contains
- 
-  subroutine bad_version_endrun
-    ! Endrun wrapper with a more useful error message.
-    character(len=128) :: errstring
-    write(errstring,*) "Invalid version number specified for P3 microphysics: ", &
-         micro_p3_tableversion
-    call endrun(errstring)
-  end subroutine bad_version_endrun
+   contains
+   
+      subroutine bad_version_endrun
+         ! Endrun wrapper with a more useful error message.
+         character(len=128) :: errstring
+         write(errstring,*) "Invalid version number specified for P3 microphysics: ", &
+               micro_p3_tableversion
+         call endrun(errstring)
+      end subroutine bad_version_endrun
 
 end subroutine micro_p3_readnl
-  !================================================================================================
+!================================================================================================
 
-  subroutine micro_p3_register()
+subroutine micro_p3_register()
 
-  logical :: prog_modal_aero ! prognostic aerosols
+   logical :: prog_modal_aero ! prognostic aerosols
 
-  integer :: idim
-  integer,parameter :: P3_in_dimsize = 16
-  integer,parameter :: P3_out_dimsize = 32
-  integer,parameter,dimension(P3_in_dimsize) :: &
-          P3_input_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16/)
-  integer,parameter,dimension(P3_out_dimsize) :: &
-          P3_output_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 /)
+   integer :: idim
+   integer,parameter :: P3_in_dimsize = 16
+   integer,parameter :: P3_out_dimsize = 32
+   integer,parameter,dimension(P3_in_dimsize) :: &
+            P3_input_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16/)
+   integer,parameter,dimension(P3_out_dimsize) :: &
+            P3_output_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 /)
 
-  if (masterproc) write(iulog,'(A20)') ' P3 register start ...'
+   if (masterproc) write(iulog,'(A20)') ' P3 register start ...'
 
-  call phys_getopts( prog_modal_aero_out   = prog_modal_aero )
+   call phys_getopts( prog_modal_aero_out   = prog_modal_aero )
 
-   ncnst = 0
-    ! Register Microphysics Constituents 
-    ! (i.e. members of state%q) and save indices.
-    ! TODO make sure the cnst_names match what we think they are here.
-    !================
-   call cnst_add(cnst_names(1), mwdry, cpair, 0._rtype, ixcldliq, &
-         longname='Grid box averaged cloud liquid amount', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(2), mwdry, cpair, 0._rtype, ixcldice, &
-         longname='Grid box averaged cloud ice amount', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(3), mwh2o, cpair, 0._rtype, ixnumliq, &
-         longname='Grid box averaged cloud liquid number', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(4), mwh2o, cpair, 0._rtype, ixnumice, &
-         longname='Grid box averaged cloud ice number', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(5), mwh2o, cpair, 0._rtype, ixrain, &
-         longname='Grid box averaged rain amount', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(6), mwh2o, cpair, 0._rtype, ixcldrim, &
-         longname='Grid box averaged riming amount', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(7), mwh2o, cpair, 0._rtype, ixnumrain, &
-         longname='Grid box averaged rain number', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
-   call cnst_add(cnst_names(8), mwh2o, cpair, 0._rtype, ixrimvol, &
-         longname='Grid box averaged riming volume', &
-         is_convtran1=.true.)
-   ncnst = ncnst + 1
+      ncnst = 0
+      ! Register Microphysics Constituents 
+      ! (i.e. members of state%q) and save indices.
+      ! TODO make sure the cnst_names match what we think they are here.
+      !================
+      call cnst_add(cnst_names(1), mwdry, cpair, 0._rtype, ixcldliq, &
+            longname='Grid box averaged cloud liquid amount', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(2), mwdry, cpair, 0._rtype, ixcldice, &
+            longname='Grid box averaged cloud ice amount', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(3), mwh2o, cpair, 0._rtype, ixnumliq, &
+            longname='Grid box averaged cloud liquid number', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(4), mwh2o, cpair, 0._rtype, ixnumice, &
+            longname='Grid box averaged cloud ice number', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(5), mwh2o, cpair, 0._rtype, ixrain, &
+            longname='Grid box averaged rain amount', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(6), mwh2o, cpair, 0._rtype, ixcldrim, &
+            longname='Grid box averaged riming amount', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(7), mwh2o, cpair, 0._rtype, ixnumrain, &
+            longname='Grid box averaged rain number', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
+      call cnst_add(cnst_names(8), mwh2o, cpair, 0._rtype, ixrimvol, &
+            longname='Grid box averaged riming volume', &
+            is_convtran1=.true.)
+      ncnst = ncnst + 1
 
-    ! Add Variables to Pbuf
-    !================
-   !! module microp_aero
-   call pbuf_add_field('CLDO','global', dtype_r8,(/pcols,pver,dyn_time_lvls/),cldo_idx) 
+      ! Add Variables to Pbuf
+      !================
+      !! module microp_aero
+      call pbuf_add_field('CLDO','global', dtype_r8,(/pcols,pver,dyn_time_lvls/),cldo_idx) 
 
-   !! module wetdep 
-   call pbuf_add_field('QME',  'physpkg',dtype_r8,(/pcols,pver/), qme_idx)
-   call pbuf_add_field('PRAIN','physpkg',dtype_r8,(/pcols,pver/), precip_total_tend_idx)
-   call pbuf_add_field('NEVAPR','physpkg',dtype_r8,(/pcols,pver/), nevapr_idx)
+      !! module wetdep 
+      call pbuf_add_field('QME',  'physpkg',dtype_r8,(/pcols,pver/), qme_idx)
+      call pbuf_add_field('PRAIN','physpkg',dtype_r8,(/pcols,pver/), precip_total_tend_idx)
+      call pbuf_add_field('NEVAPR','physpkg',dtype_r8,(/pcols,pver/), nevapr_idx)
 
-   !! module aero_model
-   if (prog_modal_aero) then
-      call pbuf_add_field('RATE1_CW2PR_ST','physpkg',dtype_r8,(/pcols,pver/),rate1_cw2pr_st_idx)
-   endif
+      !! module aero_model
+      if (prog_modal_aero) then
+         call pbuf_add_field('RATE1_CW2PR_ST','physpkg',dtype_r8,(/pcols,pver/),rate1_cw2pr_st_idx)
+      endif
 
-   !! module clubb_intr
-   call pbuf_add_field('PRER_EVAP',  'global', dtype_r8,(/pcols,pver/), qr_evap_tend_idx)
+      !! module clubb_intr
+      call pbuf_add_field('PRER_EVAP',  'global', dtype_r8,(/pcols,pver/), qr_evap_tend_idx)
 
-   !! module radiation_data & module cloud_rad_props
-   call pbuf_add_field('DEI',        'physpkg',dtype_r8,(/pcols,pver/), dei_idx)
-   call pbuf_add_field('MU',         'physpkg',dtype_r8,(/pcols,pver/), mu_idx)
-   call pbuf_add_field('LAMBDAC',    'physpkg',dtype_r8,(/pcols,pver/), lambdac_idx)
+      !! module radiation_data & module cloud_rad_props
+      call pbuf_add_field('DEI',        'physpkg',dtype_r8,(/pcols,pver/), dei_idx)
+      call pbuf_add_field('MU',         'physpkg',dtype_r8,(/pcols,pver/), mu_idx)
+      call pbuf_add_field('LAMBDAC',    'physpkg',dtype_r8,(/pcols,pver/), lambdac_idx)
 
-   !! module cospsimulator_intr
-   call pbuf_add_field('REL',        'physpkg',dtype_r8,(/pcols,pver/), rel_idx)
-   call pbuf_add_field('REI',        'physpkg',dtype_r8,(/pcols,pver/), rei_idx)
-   call pbuf_add_field('LS_FLXPRC',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxprc_idx)
-   call pbuf_add_field('LS_FLXSNW',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxsnw_idx)
-   call pbuf_add_field('LS_REFFRAIN','physpkg',dtype_r8,(/pcols,pver/), ls_reffrain_idx)
-   call pbuf_add_field('LS_REFFSNOW','physpkg',dtype_r8,(/pcols,pver/), ls_reffsnow_idx)
-   call pbuf_add_field('CV_REFFLIQ', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffliq_idx)
-   call pbuf_add_field('CV_REFFICE', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffice_idx)
- 
-   call pbuf_add_field('RELVAR',     'global',dtype_r8,(/pcols,pver/),   relvar_idx)
-   call pbuf_add_field('ACCRE_ENHAN','global',dtype_r8,(/pcols,pver/), accre_enhan_idx)
+      !! module cospsimulator_intr
+      call pbuf_add_field('REL',        'physpkg',dtype_r8,(/pcols,pver/), rel_idx)
+      call pbuf_add_field('REI',        'physpkg',dtype_r8,(/pcols,pver/), rei_idx)
+      call pbuf_add_field('LS_FLXPRC',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxprc_idx)
+      call pbuf_add_field('LS_FLXSNW',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxsnw_idx)
+      call pbuf_add_field('LS_REFFRAIN','physpkg',dtype_r8,(/pcols,pver/), ls_reffrain_idx)
+      call pbuf_add_field('LS_REFFSNOW','physpkg',dtype_r8,(/pcols,pver/), ls_reffsnow_idx)
+      call pbuf_add_field('CV_REFFLIQ', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffliq_idx)
+      call pbuf_add_field('CV_REFFICE', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffice_idx)
+   
+      call pbuf_add_field('RELVAR',     'global',dtype_r8,(/pcols,pver/),   relvar_idx)
+      call pbuf_add_field('ACCRE_ENHAN','global',dtype_r8,(/pcols,pver/), accre_enhan_idx)
 
-   call pbuf_add_field('QV_PREV',     'global',dtype_r8,(/pcols,pver/), qv_prev_idx)
-   call pbuf_add_field('T_PREV',      'global',dtype_r8,(/pcols,pver/), t_prev_idx)
- !! for prescribed CCN
-   call pbuf_add_field('MON_CCN_1',  'global', dtype_r8,(/pcols,pver/),mon_ccn_1_idx)
-   call pbuf_add_field('MON_CCN_2',  'global', dtype_r8,(/pcols,pver/),mon_ccn_2_idx)
+      call pbuf_add_field('QV_PREV',     'global',dtype_r8,(/pcols,pver/), qv_prev_idx)
+      call pbuf_add_field('T_PREV',      'global',dtype_r8,(/pcols,pver/), t_prev_idx)
+   !! for prescribed CCN
+      call pbuf_add_field('MON_CCN_1',  'global', dtype_r8,(/pcols,pver/),mon_ccn_1_idx)
+      call pbuf_add_field('MON_CCN_2',  'global', dtype_r8,(/pcols,pver/),mon_ccn_2_idx)
 
-   call add_hist_coord('P3_input_dim',  P3_in_dimsize, 'Input field dimension for p3_main subroutine',  'N/A', P3_input_dim)
-   call add_hist_coord('P3_output_dim', P3_out_dimsize, 'Output field dimension for p3_main subroutine', 'N/A', P3_output_dim)
+      call add_hist_coord('P3_input_dim',  P3_in_dimsize, 'Input field dimension for p3_main subroutine',  'N/A', P3_input_dim)
+      call add_hist_coord('P3_output_dim', P3_out_dimsize, 'Output field dimension for p3_main subroutine', 'N/A', P3_output_dim)
 
-   if (masterproc) write(iulog,'(A20)') '    P3 register finished'
-  end subroutine micro_p3_register
+      if (masterproc) write(iulog,'(A20)') '    P3 register finished'
+end subroutine micro_p3_register
 
   !================================================================================================
   function micro_p3_implements_cnst(name)
@@ -573,9 +573,9 @@ end subroutine micro_p3_readnl
    call addfld ('REL', (/ 'lev' /), 'A', 'micron', 'REL stratiform cloud effective radius liquid')
    call addfld ('REI', (/ 'lev' /), 'A', 'micron', 'REI stratiform cloud effective radius ice')
 
-!!== KZ_DCS
+   !!== KZ_DCS
    call addfld ('DCST',(/ 'lev' /), 'A','m','dcs')
-!!== KZ_DCS
+   !!== KZ_DCS
    ! diagnostic precip
    call addfld ('QRAIN',(/ 'lev' /), 'A','kg/kg','Diagnostic grid-mean rain mixing ratio'         )
    call addfld ('QSNOW',(/ 'lev' /), 'A','kg/kg','Diagnostic grid-mean snow mixing ratio'         )
@@ -812,7 +812,7 @@ end subroutine micro_p3_readnl
 
    endif
 
-  end subroutine micro_p3_init
+end subroutine micro_p3_init
 
   !================================================================================================
     subroutine get_cloud_fraction(its,ite,kts,kte,ast,qc,qr,qi,method, &
@@ -956,7 +956,7 @@ end subroutine micro_p3_readnl
     end subroutine get_prescribed_CCN
 
   !================================================================================================
-  subroutine micro_p3_tend(state, ptend, dtime, pbuf)
+ subroutine micro_p3_tend(state, ptend, dtime, pbuf)
 
     use phys_grid,      only: get_rlat_all_p, get_rlon_all_p, get_gcol_all_p
     use time_manager,   only: get_nstep
@@ -1117,7 +1117,7 @@ end subroutine micro_p3_readnl
     call pbuf_get_field(pbuf, npccn_idx,       npccn                                                 )
     call pbuf_get_field(pbuf, cmeliq_idx,      cmeliq                                                )
     
-    if (use_hetfrz_classnuc) then
+    if (use_hetfrz_classnuc) then !KC:=T
       call pbuf_get_field(pbuf, frzimm_idx, frzimm                                               )
       call pbuf_get_field(pbuf, frzcnt_idx, frzcnt                                               )
       call pbuf_get_field(pbuf, frzdep_idx, frzdep                                               )
@@ -1185,15 +1185,15 @@ end subroutine micro_p3_readnl
 
     ! HANDLE AEROSOL ACTIVATION
     !==============
-    do_predict_nc = micro_aerosolactivation 
+    do_predict_nc = micro_aerosolactivation !KC: =T
 
     ! COMPUTE GEOMETRIC THICKNESS OF GRID & CONVERT T TO POTENTIAL TEMPERATURE
     !==============
     exner(:ncol,:pver) = 1._rtype/((state%pmid(:ncol,:pver)*1.e-5_rtype)**(rair*inv_cp))
     do icol = 1,ncol
        do k = 1,pver
-! Note: dz is calculated in the opposite direction that pdel is calculated,
-! thus when considering any dp/dz calculation we must also change the sign.
+      ! Note: dz is calculated in the opposite direction that pdel is calculated,
+      ! thus when considering any dp/dz calculation we must also change the sign.
           dz(icol,k) = state%zi(icol,k) - state%zi(icol,k+1)
           th(icol,k)  = state%t(icol,k)*exner(icol,k) !/(state%pmid(icol,k)*1.e-5)**(rd*inv_cp) 
        end do
@@ -1255,7 +1255,7 @@ end subroutine micro_p3_readnl
     cld_frac_i(:,:) = 1.0_rtype
     cld_frac_l(:,:) = 1.0_rtype
     cld_frac_r(:,:) = 1.0_rtype
-    do_subgrid_clouds = micro_subgrid_cloud
+    do_subgrid_clouds = micro_subgrid_cloud !KC=T
     if (do_subgrid_clouds) &
         call get_cloud_fraction(its,ite,kts,kte,ast(its:ite,kts:kte),cldliq(its:ite,kts:kte), &
                 rain(its:ite,kts:kte),ice(its:ite,kts:kte),precip_frac_method, &
@@ -1284,7 +1284,8 @@ end subroutine micro_p3_readnl
     end do
     p3_main_inputs(its:ite,pver+1,5) = state%zi(its:ite,pver+1)
 
-    !read in prescribed CCN if log_prescribeCCN is true
+    !read in prescribed CCN if log_prescribeCCN is true 
+    ! KC: do_prescribed_CCN=False
     if (do_prescribed_CCN) call get_prescribed_CCN(nccn_prescribed,micro_p3_lookup_dir,its,ite,kts,kte,pbuf,lchnk)
 
     ! CALL P3
@@ -1297,6 +1298,9 @@ end subroutine micro_p3_readnl
     vap_liq_exchange = 0.0_rtype
 
     call t_startf('micro_p3_tend_loop')
+
+    !KC: make P3 substepping loop here:
+
     call p3_main( &
          cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
          numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
@@ -1364,7 +1368,8 @@ end subroutine micro_p3_readnl
          t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
          col_location(its:ite,:3),         & ! IN column locations
          diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
-         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
+         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)!OUT equivalent reflectivity for rain and ice [dBz]
+    ) 
          
 
     p3_main_outputs(:,:,:) = -999._rtype
@@ -1429,6 +1434,9 @@ end subroutine micro_p3_readnl
     t_prev(:ncol,:pver) = temp(:ncol,:pver)
     qv_prev(:ncol,:pver) = qv(:ncol,:pver)
 
+    !KC: need to add ptend_sum/scale and accumlate.
+
+    !KC: end of P3 loop
     call t_stopf('micro_p3_tend_loop')
     call t_startf('micro_p3_tend_finish')
    ! Following MG interface as a template:
@@ -1438,7 +1446,12 @@ end subroutine micro_p3_readnl
     ! Add cmeliq to  vap_liq_exchange
     vap_liq_exchange(:ncol,top_lev:pver) = vap_liq_exchange(:ncol,top_lev:pver) + cmeliq(:ncol,top_lev:pver) 
 
-!====================== Export variables/Conservation START ======================!
+   !KC: avg rain flux
+   ! declare a loc variable for this to accumulate.
+   ! ptend & state reference to mg code;
+   ! 
+
+   !====================== Export variables/Conservation START ======================!
      !For precip, accumulate only total precip in prec_pcw and snow_pcw variables.
     ! Other precip output variables are set to 0
     ! Do not subscript by ncol here, because in physpkg we divide the whole
@@ -1450,9 +1463,9 @@ end subroutine micro_p3_readnl
     snow_pcw = precip_ice_surf
     snow_sed = 0._rtype
     snow_str = snow_pcw + snow_sed
-!====================== Export variables/Conservation END ======================!
+   !====================== Export variables/Conservation END ======================!
 
-!====================== Radiation Specific Outputs START ======================!
+   !====================== Radiation Specific Outputs START ======================!
 
    ! Calculate rho for size distribution
    ! parameter calculations and average it if needed
@@ -1580,21 +1593,21 @@ end subroutine micro_p3_readnl
            1.5_rtype * 1.e6_rtype
    end where
 
-!====================== COSP Specific Outputs START ======================!
-! LS_FLXPRC, LS_FLXSNW, LS_REFFRAIN, LS_REFFSNOW, CV_REFFLIQ, CV_REFFICE
+   !====================== COSP Specific Outputs START ======================!
+   ! LS_FLXPRC, LS_FLXSNW, LS_REFFRAIN, LS_REFFSNOW, CV_REFFLIQ, CV_REFFICE
    !== Grid-box mean flux_large_scale_cloud at interfaces (kg/m2/s)
-! flxprc and flxsnw are used in COSP to compute precipitation fractional
-! area and derive precipitation (rain and snow) mixing ratios. Including iflx
-! and cflx in precipitation fluxes would result in additional effects of cloud liquid and
-! ice on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
-! portion of calculations that are handled separately from that of cloud liquid
-! and ice. If included, it would not exactly amount to double counting the effect of
-! cloud liquid and ice because the mixing ratio derived from iflx and cflx epected to be much smaller
-! than the actual grid-mean cldliq and cldice, and rain or snow size distribution
-! would be used to compute the lidar/radar signal strength.
-! 
-! Note that it would need to include iflx and cflx to make the values at surface
-! interface consistent with large scale precipitation rates.
+   ! flxprc and flxsnw are used in COSP to compute precipitation fractional
+   ! area and derive precipitation (rain and snow) mixing ratios. Including iflx
+   ! and cflx in precipitation fluxes would result in additional effects of cloud liquid and
+   ! ice on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
+   ! portion of calculations that are handled separately from that of cloud liquid
+   ! and ice. If included, it would not exactly amount to double counting the effect of
+   ! cloud liquid and ice because the mixing ratio derived from iflx and cflx epected to be much smaller
+   ! than the actual grid-mean cldliq and cldice, and rain or snow size distribution
+   ! would be used to compute the lidar/radar signal strength.
+   ! 
+   ! Note that it would need to include iflx and cflx to make the values at surface
+   ! interface consistent with large scale precipitation rates.
 
     ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     flxprc(:ncol,1:top_lev) = 0.0_rtype ! Rain+Snow
@@ -1611,7 +1624,7 @@ end subroutine micro_p3_readnl
     reffrain(:ncol,top_lev:pver) = reff_rain(:ncol,top_lev:pver)
     reffsnow(:ncol,top_lev:pver) = 1000._rtype !! dummy value, the choice here impacts the COSP output variable: CFAD_DBZE94_CS.  TODO: Figure out if this is ok, change if needed.
 
-!====================== COSP Specific Outputs  END ======================!
+   !====================== COSP Specific Outputs  END ======================!
 
     !WRITE OUTPUT
     !=============
@@ -1667,7 +1680,7 @@ end subroutine micro_p3_readnl
    call outfld('P3_nr2ni_immers_frz_tend', tend_out(:,:,31), pcols, lchnk) 
    call outfld('P3_nr_ice_shed_tend',     tend_out(:,:,32), pcols, lchnk) 
    call outfld('P3_qc2qr_ice_shed_tend',  tend_out(:,:,33), pcols, lchnk) 
-!   call outfld('P3_qcmul',               tend_out(:,:,34), pcols, lchnk) ! Not actually used, so not actually recorded.  Commented out here for continuity of the array.
+   !call outfld('P3_qcmul',               tend_out(:,:,34), pcols, lchnk) ! Not actually used, so not actually recorded.  Commented out here for continuity of the array.
    call outfld('P3_ncshdc',               tend_out(:,:,35), pcols, lchnk)
    ! sedimentation 
    call outfld('P3_sed_CLDLIQ',           tend_out(:,:,36), pcols, lchnk)
@@ -1706,7 +1719,7 @@ end subroutine micro_p3_readnl
 
 
    call t_stopf('micro_p3_tend_finish')
-  end subroutine micro_p3_tend
+ end subroutine micro_p3_tend
 
 
   !================================================================================================
