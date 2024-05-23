@@ -2838,9 +2838,9 @@ subroutine tphysbc (ztodt,               &
                ! =====================================================  
                if (do_clubb_sgs) then
                   call clubb_tend_cam(state,ptend,pbuf,diag,cld_macmic_ztodt,&
-                     mfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
+                     cmfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
                      dlf, det_s, det_ice, lcldo)
-	            endif
+	       endif
    
                if (do_shoc_sgs) then !KC: =False
                   call shoc_tend_e3sm(state,ptend,pbuf,cld_macmic_ztodt,&

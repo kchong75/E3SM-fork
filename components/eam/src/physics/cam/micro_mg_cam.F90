@@ -670,13 +670,12 @@ subroutine micro_mg_cam_init(pbuf2d)
               micro_mg_dcs,                  &
               micro_mg_dcs_tdep,             &
               microp_uniform, do_cldice, use_hetfrz_classnuc, &
-	           do_nccons, do_nicons, nccons, nicons, mincdnc, &
+	      do_nccons, do_nicons, nccons, nicons, mincdnc, &
               micro_mg_precip_frac_method, micro_mg_berg_eff_factor, &
               allow_sed_supersat, ice_sed_ai, prc_coef1_in,prc_exp_in, &
               prc_exp1_in, cld_sed_in, mg_prc_coeff_fix_in, &
               micro_mg_mass_gradient_alpha, micro_mg_mass_gradient_beta, &
-              errstring
-         )
+              errstring)
       end select
    end select
 
@@ -2056,7 +2055,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_qr,              packed_qs,              &
                  packed_nr,              packed_ns,              &
                  packed_relvar,          packed_accre_enhan,     &
-		           precip_off,                                     &
+		 precip_off,                                     &
                  packed_p,               packed_pdel,            &
                  packed_cldn,    packed_liqcldf, packed_icecldf, &
                  packed_rate1ord_cw2pr_st,                       &
@@ -2101,9 +2100,8 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_nfice,           packed_qcrat,           &
                  errstring, &
                  packed_tnd_qsnow,packed_tnd_nsnow,packed_re_ice,&
-		           packed_prer_evap,                                     &
-                 packed_frzimm,  packed_frzcnt,  packed_frzdep   
-            ) !end of call of micro_mg_tend2_0
+                 packed_prer_evap,                               &
+                 packed_frzimm,  packed_frzcnt,  packed_frzdep   ) !end of call of micro_mg_tend2_0
             call t_stopf('micro_mg_tend2')
          end select
       end select

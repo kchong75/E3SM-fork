@@ -1284,7 +1284,7 @@ end subroutine micro_p3_init
     end do
     p3_main_inputs(its:ite,pver+1,5) = state%zi(its:ite,pver+1)
 
-    !read in prescribed CCN if log_prescribeCCN is true 
+    !read in prescribed CCN if log_prescribeCCN is true
     ! KC: do_prescribed_CCN=False
     if (do_prescribed_CCN) call get_prescribed_CCN(nccn_prescribed,micro_p3_lookup_dir,its,ite,kts,kte,pbuf,lchnk)
 
@@ -1368,8 +1368,7 @@ end subroutine micro_p3_init
          t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
          col_location(its:ite,:3),         & ! IN column locations
          diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
-         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)!OUT equivalent reflectivity for rain and ice [dBz]
-    ) 
+         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
          
 
     p3_main_outputs(:,:,:) = -999._rtype
