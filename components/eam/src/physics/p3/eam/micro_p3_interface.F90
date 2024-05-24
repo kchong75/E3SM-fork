@@ -175,18 +175,18 @@ subroutine micro_p3_readnl(nlfile)
 
   !-----------------------------------------------------------------------------
 
-   if (masterproc) then
-      unitn = getunit()
-      open( unitn, file=trim(nlfile), status='old' )
-      call find_group_name(unitn, 'micro_nl', status=ierr)
-      if (ierr == 0) then
-         read(unitn, micro_nl, iostat=ierr)
-         if (ierr /= 0) then
-            call endrun(subname // ':: ERROR reading namelist')
-         end if
-      end if
-      close(unitn)
-      call freeunit(unitn)
+  if (masterproc) then
+     unitn = getunit()
+     open( unitn, file=trim(nlfile), status='old' )
+     call find_group_name(unitn, 'micro_nl', status=ierr)
+     if (ierr == 0) then
+        read(unitn, micro_nl, iostat=ierr)
+        if (ierr /= 0) then
+           call endrun(subname // ':: ERROR reading namelist')
+        end if
+     end if
+     close(unitn)
+     call freeunit(unitn)
 
      ! set local variables
      num_steps = p3_num_steps
@@ -211,161 +211,161 @@ subroutine micro_p3_readnl(nlfile)
      write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
      write(iulog,'(A30,1x,I10)')  'p3_num_steps',              p3_num_steps
 
-   end if
+  end if
 
-   #ifdef SPMD
-      ! Broadcast namelist variables
-      call mpibcast(micro_p3_tableversion,   len(micro_p3_tableversion), mpichar, 0, mpicom)
-      call mpibcast(micro_p3_lookup_dir,     len(micro_p3_lookup_dir),   mpichar, 0, mpicom)
-      call mpibcast(micro_aerosolactivation, 1,                          mpilog,  0, mpicom)
-      call mpibcast(micro_subgrid_cloud,     1,                          mpilog,  0, mpicom)
-      call mpibcast(micro_tend_output,       1,                          mpilog,  0, mpicom)
-      call mpibcast(p3_autocon_coeff,        1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_qc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_nc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_accret_coeff,         1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_qc_accret_expon,      1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_wbf_coeff,            1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_mincdnc,              1 ,                         mpir8,   0, mpicom) 
-      call mpibcast(p3_max_mean_rain_size,   1 ,                         mpir8,   0, mpicom)
-      call mpibcast(p3_embryonic_rain_size,  1 ,                         mpir8,   0, mpicom)
-      call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
-      call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom) 
-      call mpibcast(num_steps,               1 ,                         mpiint,  0, mpicom)
+#ifdef SPMD
+  ! Broadcast namelist variables
+  call mpibcast(micro_p3_tableversion,   len(micro_p3_tableversion), mpichar, 0, mpicom)
+  call mpibcast(micro_p3_lookup_dir,     len(micro_p3_lookup_dir),   mpichar, 0, mpicom)
+  call mpibcast(micro_aerosolactivation, 1,                          mpilog,  0, mpicom)
+  call mpibcast(micro_subgrid_cloud,     1,                          mpilog,  0, mpicom)
+  call mpibcast(micro_tend_output,       1,                          mpilog,  0, mpicom)
+  call mpibcast(p3_autocon_coeff,        1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_qc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_nc_autocon_expon,     1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_accret_coeff,         1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_qc_accret_expon,      1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_wbf_coeff,            1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_mincdnc,              1 ,                         mpir8,   0, mpicom) 
+  call mpibcast(p3_max_mean_rain_size,   1 ,                         mpir8,   0, mpicom)
+  call mpibcast(p3_embryonic_rain_size,  1 ,                         mpir8,   0, mpicom)
+  call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
+  call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom)
+  call mpibcast(num_steps,               1 ,                         mpiint,  0, mpicom)
 
-   #endif
+#endif
 
-   ! Check to make sure p3 table version is valid
+  ! Check to make sure p3 table version is valid
   select case (trim(micro_p3_tableversion))
-      case ('4')
-         ! Version 4 is valid
-      case ('4.1')
-         ! Version 4.1 is valid
-      case ('4.1.1')
-         ! Version 4.1.1 is valid
-      case ('4.1.2')
-         ! Version 4.1.2 is valid      
-      case default
-         print *, micro_p3_tableversion
-         call bad_version_endrun()
-   end select
+    case ('4')
+       ! Version 4 is valid
+    case ('4.1')
+      ! Version 4.1 is valid
+    case ('4.1.1')
+      ! Version 4.1.1 is valid
+    case ('4.1.2')
+      ! Version 4.1.2 is valid      
+    case default
+       print *, micro_p3_tableversion
+       call bad_version_endrun()
+  end select
 
-   if (masterproc) write(iulog,'(A50)') ' ----- P3 READ NL Finshed: -----'
+  if (masterproc) write(iulog,'(A50)') ' ----- P3 READ NL Finshed: -----'
 
-   contains
-   
-      subroutine bad_version_endrun
-         ! Endrun wrapper with a more useful error message.
-         character(len=128) :: errstring
-         write(errstring,*) "Invalid version number specified for P3 microphysics: ", &
-               micro_p3_tableversion
-         call endrun(errstring)
-      end subroutine bad_version_endrun
+contains
+ 
+  subroutine bad_version_endrun
+    ! Endrun wrapper with a more useful error message.
+    character(len=128) :: errstring
+    write(errstring,*) "Invalid version number specified for P3 microphysics: ", &
+         micro_p3_tableversion
+    call endrun(errstring)
+  end subroutine bad_version_endrun
 
 end subroutine micro_p3_readnl
   !================================================================================================
 
-subroutine micro_p3_register()
+  subroutine micro_p3_register()
 
-   logical :: prog_modal_aero ! prognostic aerosols
+  logical :: prog_modal_aero ! prognostic aerosols
 
-   integer :: idim
-   integer,parameter :: P3_in_dimsize = 16
-   integer,parameter :: P3_out_dimsize = 32
-   integer,parameter,dimension(P3_in_dimsize) :: &
-            P3_input_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16/)
-   integer,parameter,dimension(P3_out_dimsize) :: &
-            P3_output_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 /)
+  integer :: idim
+  integer,parameter :: P3_in_dimsize = 16
+  integer,parameter :: P3_out_dimsize = 32
+  integer,parameter,dimension(P3_in_dimsize) :: &
+          P3_input_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16/)
+  integer,parameter,dimension(P3_out_dimsize) :: &
+          P3_output_dim = (/ 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32 /)
 
-   if (masterproc) write(iulog,'(A20)') ' P3 register start ...'
+  if (masterproc) write(iulog,'(A20)') ' P3 register start ...'
 
-   call phys_getopts( prog_modal_aero_out   = prog_modal_aero )
+  call phys_getopts( prog_modal_aero_out   = prog_modal_aero )
 
-      ncnst = 0
-      ! Register Microphysics Constituents 
-      ! (i.e. members of state%q) and save indices.
-      ! TODO make sure the cnst_names match what we think they are here.
-      !================
-      call cnst_add(cnst_names(1), mwdry, cpair, 0._rtype, ixcldliq, &
-            longname='Grid box averaged cloud liquid amount', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(2), mwdry, cpair, 0._rtype, ixcldice, &
-            longname='Grid box averaged cloud ice amount', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(3), mwh2o, cpair, 0._rtype, ixnumliq, &
-            longname='Grid box averaged cloud liquid number', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(4), mwh2o, cpair, 0._rtype, ixnumice, &
-            longname='Grid box averaged cloud ice number', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(5), mwh2o, cpair, 0._rtype, ixrain, &
-            longname='Grid box averaged rain amount', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(6), mwh2o, cpair, 0._rtype, ixcldrim, &
-            longname='Grid box averaged riming amount', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(7), mwh2o, cpair, 0._rtype, ixnumrain, &
-            longname='Grid box averaged rain number', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
-      call cnst_add(cnst_names(8), mwh2o, cpair, 0._rtype, ixrimvol, &
-            longname='Grid box averaged riming volume', &
-            is_convtran1=.true.)
-      ncnst = ncnst + 1
+   ncnst = 0
+    ! Register Microphysics Constituents 
+    ! (i.e. members of state%q) and save indices.
+    ! TODO make sure the cnst_names match what we think they are here.
+    !================
+   call cnst_add(cnst_names(1), mwdry, cpair, 0._rtype, ixcldliq, &
+         longname='Grid box averaged cloud liquid amount', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(2), mwdry, cpair, 0._rtype, ixcldice, &
+         longname='Grid box averaged cloud ice amount', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(3), mwh2o, cpair, 0._rtype, ixnumliq, &
+         longname='Grid box averaged cloud liquid number', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(4), mwh2o, cpair, 0._rtype, ixnumice, &
+         longname='Grid box averaged cloud ice number', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(5), mwh2o, cpair, 0._rtype, ixrain, &
+         longname='Grid box averaged rain amount', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(6), mwh2o, cpair, 0._rtype, ixcldrim, &
+         longname='Grid box averaged riming amount', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(7), mwh2o, cpair, 0._rtype, ixnumrain, &
+         longname='Grid box averaged rain number', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
+   call cnst_add(cnst_names(8), mwh2o, cpair, 0._rtype, ixrimvol, &
+         longname='Grid box averaged riming volume', &
+         is_convtran1=.true.)
+   ncnst = ncnst + 1
 
-      ! Add Variables to Pbuf
-      !================
-      !! module microp_aero
-      call pbuf_add_field('CLDO','global', dtype_r8,(/pcols,pver,dyn_time_lvls/),cldo_idx) 
+    ! Add Variables to Pbuf
+    !================
+   !! module microp_aero
+   call pbuf_add_field('CLDO','global', dtype_r8,(/pcols,pver,dyn_time_lvls/),cldo_idx) 
 
-      !! module wetdep 
-      call pbuf_add_field('QME',  'physpkg',dtype_r8,(/pcols,pver/), qme_idx)
-      call pbuf_add_field('PRAIN','physpkg',dtype_r8,(/pcols,pver/), precip_total_tend_idx)
-      call pbuf_add_field('NEVAPR','physpkg',dtype_r8,(/pcols,pver/), nevapr_idx)
+   !! module wetdep 
+   call pbuf_add_field('QME',  'physpkg',dtype_r8,(/pcols,pver/), qme_idx)
+   call pbuf_add_field('PRAIN','physpkg',dtype_r8,(/pcols,pver/), precip_total_tend_idx)
+   call pbuf_add_field('NEVAPR','physpkg',dtype_r8,(/pcols,pver/), nevapr_idx)
 
-      !! module aero_model
-      if (prog_modal_aero) then
-         call pbuf_add_field('RATE1_CW2PR_ST','physpkg',dtype_r8,(/pcols,pver/),rate1_cw2pr_st_idx)
-      endif
+   !! module aero_model
+   if (prog_modal_aero) then
+      call pbuf_add_field('RATE1_CW2PR_ST','physpkg',dtype_r8,(/pcols,pver/),rate1_cw2pr_st_idx)
+   endif
 
-      !! module clubb_intr
-      call pbuf_add_field('PRER_EVAP',  'global', dtype_r8,(/pcols,pver/), qr_evap_tend_idx)
+   !! module clubb_intr
+   call pbuf_add_field('PRER_EVAP',  'global', dtype_r8,(/pcols,pver/), qr_evap_tend_idx)
 
-      !! module radiation_data & module cloud_rad_props
-      call pbuf_add_field('DEI',        'physpkg',dtype_r8,(/pcols,pver/), dei_idx)
-      call pbuf_add_field('MU',         'physpkg',dtype_r8,(/pcols,pver/), mu_idx)
-      call pbuf_add_field('LAMBDAC',    'physpkg',dtype_r8,(/pcols,pver/), lambdac_idx)
+   !! module radiation_data & module cloud_rad_props
+   call pbuf_add_field('DEI',        'physpkg',dtype_r8,(/pcols,pver/), dei_idx)
+   call pbuf_add_field('MU',         'physpkg',dtype_r8,(/pcols,pver/), mu_idx)
+   call pbuf_add_field('LAMBDAC',    'physpkg',dtype_r8,(/pcols,pver/), lambdac_idx)
 
-      !! module cospsimulator_intr
-      call pbuf_add_field('REL',        'physpkg',dtype_r8,(/pcols,pver/), rel_idx)
-      call pbuf_add_field('REI',        'physpkg',dtype_r8,(/pcols,pver/), rei_idx)
-      call pbuf_add_field('LS_FLXPRC',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxprc_idx)
-      call pbuf_add_field('LS_FLXSNW',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxsnw_idx)
-      call pbuf_add_field('LS_REFFRAIN','physpkg',dtype_r8,(/pcols,pver/), ls_reffrain_idx)
-      call pbuf_add_field('LS_REFFSNOW','physpkg',dtype_r8,(/pcols,pver/), ls_reffsnow_idx)
-      call pbuf_add_field('CV_REFFLIQ', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffliq_idx)
-      call pbuf_add_field('CV_REFFICE', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffice_idx)
-   
-      call pbuf_add_field('RELVAR',     'global',dtype_r8,(/pcols,pver/),   relvar_idx)
-      call pbuf_add_field('ACCRE_ENHAN','global',dtype_r8,(/pcols,pver/), accre_enhan_idx)
+   !! module cospsimulator_intr
+   call pbuf_add_field('REL',        'physpkg',dtype_r8,(/pcols,pver/), rel_idx)
+   call pbuf_add_field('REI',        'physpkg',dtype_r8,(/pcols,pver/), rei_idx)
+   call pbuf_add_field('LS_FLXPRC',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxprc_idx)
+   call pbuf_add_field('LS_FLXSNW',  'physpkg',dtype_r8,(/pcols,pverp/), ls_flxsnw_idx)
+   call pbuf_add_field('LS_REFFRAIN','physpkg',dtype_r8,(/pcols,pver/), ls_reffrain_idx)
+   call pbuf_add_field('LS_REFFSNOW','physpkg',dtype_r8,(/pcols,pver/), ls_reffsnow_idx)
+   call pbuf_add_field('CV_REFFLIQ', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffliq_idx)
+   call pbuf_add_field('CV_REFFICE', 'physpkg',dtype_r8,(/pcols,pver/), cv_reffice_idx)
+ 
+   call pbuf_add_field('RELVAR',     'global',dtype_r8,(/pcols,pver/),   relvar_idx)
+   call pbuf_add_field('ACCRE_ENHAN','global',dtype_r8,(/pcols,pver/), accre_enhan_idx)
 
-      call pbuf_add_field('QV_PREV',     'global',dtype_r8,(/pcols,pver/), qv_prev_idx)
-      call pbuf_add_field('T_PREV',      'global',dtype_r8,(/pcols,pver/), t_prev_idx)
-   !! for prescribed CCN
-      call pbuf_add_field('MON_CCN_1',  'global', dtype_r8,(/pcols,pver/),mon_ccn_1_idx)
-      call pbuf_add_field('MON_CCN_2',  'global', dtype_r8,(/pcols,pver/),mon_ccn_2_idx)
+   call pbuf_add_field('QV_PREV',     'global',dtype_r8,(/pcols,pver/), qv_prev_idx)
+   call pbuf_add_field('T_PREV',      'global',dtype_r8,(/pcols,pver/), t_prev_idx)
+ !! for prescribed CCN
+   call pbuf_add_field('MON_CCN_1',  'global', dtype_r8,(/pcols,pver/),mon_ccn_1_idx)
+   call pbuf_add_field('MON_CCN_2',  'global', dtype_r8,(/pcols,pver/),mon_ccn_2_idx)
 
-      call add_hist_coord('P3_input_dim',  P3_in_dimsize, 'Input field dimension for p3_main subroutine',  'N/A', P3_input_dim)
-      call add_hist_coord('P3_output_dim', P3_out_dimsize, 'Output field dimension for p3_main subroutine', 'N/A', P3_output_dim)
+   call add_hist_coord('P3_input_dim',  P3_in_dimsize, 'Input field dimension for p3_main subroutine',  'N/A', P3_input_dim)
+   call add_hist_coord('P3_output_dim', P3_out_dimsize, 'Output field dimension for p3_main subroutine', 'N/A', P3_output_dim)
 
-      if (masterproc) write(iulog,'(A20)') '    P3 register finished'
-end subroutine micro_p3_register
+   if (masterproc) write(iulog,'(A20)') '    P3 register finished'
+  end subroutine micro_p3_register
 
   !================================================================================================
   function micro_p3_implements_cnst(name)
@@ -585,9 +585,9 @@ end subroutine micro_p3_register
    call addfld ('REL', (/ 'lev' /), 'A', 'micron', 'REL stratiform cloud effective radius liquid')
    call addfld ('REI', (/ 'lev' /), 'A', 'micron', 'REI stratiform cloud effective radius ice')
 
-   !!== KZ_DCS
+!!== KZ_DCS
    call addfld ('DCST',(/ 'lev' /), 'A','m','dcs')
-   !!== KZ_DCS
+!!== KZ_DCS
    ! diagnostic precip
    call addfld ('QRAIN',(/ 'lev' /), 'A','kg/kg','Diagnostic grid-mean rain mixing ratio'         )
    call addfld ('QSNOW',(/ 'lev' /), 'A','kg/kg','Diagnostic grid-mean snow mixing ratio'         )
@@ -824,7 +824,7 @@ end subroutine micro_p3_register
 
    endif
 
-end subroutine micro_p3_init
+  end subroutine micro_p3_init
 
   !================================================================================================
     subroutine get_cloud_fraction(its,ite,kts,kte,ast,qc,qr,qi,method, &
@@ -1114,8 +1114,11 @@ end subroutine micro_p3_init
     real(rtype), parameter :: deicon = 50._rtype            ! Convective ice effective diameter (um)
 
     ! A local copy of state and ptend used in the diagnostic calculationsin in substeping of P3 
-    !KC: in p3, they make local copies of variables directly, so no need to copy the whole state
-    !type(physics_state) :: state_loc 
+    !KC: in P3, they make local copies of variables and update them in call of p3_main
+    ! At every iteration, local copies are updated, but also need to know the ptend_loc for each iteration
+    ! so still need state_loc and physics_update(state_loc) at each iteration 
+    ! To-Do: find an alternative to improve efficiency: make loc copies of changed state variables?
+    type(physics_state) :: state_loc 
     type(physics_ptend) :: ptend_loc
 
     call t_startf('micro_p3_tend_init')
@@ -1134,7 +1137,8 @@ end subroutine micro_p3_init
     call pbuf_get_field(pbuf, npccn_idx,       npccn                                                 )
     call pbuf_get_field(pbuf, cmeliq_idx,      cmeliq                                                )
     
-    if (use_hetfrz_classnuc) then !KC:=T
+    if (use_hetfrz_classnuc) then
+      !KC:=T
       call pbuf_get_field(pbuf, frzimm_idx, frzimm                                               )
       call pbuf_get_field(pbuf, frzcnt_idx, frzcnt                                               )
       call pbuf_get_field(pbuf, frzdep_idx, frzdep                                               )
@@ -1186,7 +1190,7 @@ end subroutine micro_p3_init
 
     !KC: probably don't need to make local copy of state_loc
     !!Initialize local state (state_loc) from input
-    !call physics_state_copy(state, state_loc)
+    call physics_state_copy(state, state_loc)
 
     
     ! INITIALIZE PTEND
@@ -1207,15 +1211,16 @@ end subroutine micro_p3_init
 
     ! HANDLE AEROSOL ACTIVATION
     !==============
-    do_predict_nc = micro_aerosolactivation !KC: =T
+    do_predict_nc = micro_aerosolactivation 
+    !KC: =T
 
     ! COMPUTE GEOMETRIC THICKNESS OF GRID & CONVERT T TO POTENTIAL TEMPERATURE
     !==============
     exner(:ncol,:pver) = 1._rtype/((state%pmid(:ncol,:pver)*1.e-5_rtype)**(rair*inv_cp))
     do icol = 1,ncol
        do k = 1,pver
-      ! Note: dz is calculated in the opposite direction that pdel is calculated,
-      ! thus when considering any dp/dz calculation we must also change the sign.
+! Note: dz is calculated in the opposite direction that pdel is calculated,
+! thus when considering any dp/dz calculation we must also change the sign.
           dz(icol,k) = state%zi(icol,k) - state%zi(icol,k+1)
           th(icol,k)  = state%t(icol,k)*exner(icol,k) !/(state%pmid(icol,k)*1.e-5)**(rd*inv_cp) 
        end do
@@ -1255,20 +1260,20 @@ end subroutine micro_p3_init
     !is created by copying the whole state. It is much cheaper to just copy the 
     !variables we need. 
     
-    cldliq  = state%q(:,:,ixcldliq)
-    numliq  = state%q(:,:,ixnumliq)
-    rain    = state%q(:,:,ixrain)
-    numrain = state%q(:,:,ixnumrain)
-    qv      = state%q(:,:,1)
-    ice     = state%q(:,:,ixcldice)
-    qm      = state%q(:,:,ixcldrim) !Aaron, changed ixqm to ixcldrim to match Kai's code
-    numice  = state%q(:,:,ixnumice)
-    rimvol  = state%q(:,:,ixrimvol)
+    cldliq  = state_loc%q(:,:,ixcldliq)
+    numliq  = state_loc%q(:,:,ixnumliq)
+    rain    = state_loc%q(:,:,ixrain)
+    numrain = state_loc%q(:,:,ixnumrain)
+    qv      = state_loc%q(:,:,1)
+    ice     = state_loc%q(:,:,ixcldice)
+    qm      = state_loc%q(:,:,ixcldrim) !Aaron, changed ixqm to ixcldrim to match Kai's code
+    numice  = state_loc%q(:,:,ixnumice)
+    rimvol  = state_loc%q(:,:,ixrimvol)
     its     = 1
-    ite     = state%ncol
+    ite     = state_loc%ncol
     kts     = 1
     kte     = pver
-    pres    = state%pmid(:,:)
+    pres    = state_loc%pmid(:,:)
     ! Initialize the raidation dependent variables.
     mu      = 0.0_rtype !mucon
     lambdac = 0.0_rtype !(mucon + 1._rtype)/dcon
@@ -1277,11 +1282,8 @@ end subroutine micro_p3_init
     cld_frac_i(:,:) = 1.0_rtype
     cld_frac_l(:,:) = 1.0_rtype
     cld_frac_r(:,:) = 1.0_rtype
-    do_subgrid_clouds = micro_subgrid_cloud !KC=T
-    if (do_subgrid_clouds) &
-        call get_cloud_fraction(its,ite,kts,kte,ast(its:ite,kts:kte),cldliq(its:ite,kts:kte), &
-                rain(its:ite,kts:kte),ice(its:ite,kts:kte),precip_frac_method, &
-                cld_frac_i(its:ite,kts:kte),cld_frac_l(its:ite,kts:kte),cld_frac_r(its:ite,kts:kte))
+    do_subgrid_clouds = micro_subgrid_cloud
+    !KC: do_subgrid_clouds=T
     call t_stopf('micro_p3_tend_init')
 
     p3_main_inputs(:,:,:) = -999._rtype
@@ -1306,13 +1308,13 @@ end subroutine micro_p3_init
     end do
     p3_main_inputs(its:ite,pver+1,5) = state%zi(its:ite,pver+1)
 
-    !read in prescribed CCN if log_prescribeCCN is true
-    ! KC: do_prescribed_CCN=False
-    if (do_prescribed_CCN) call get_prescribed_CCN(nccn_prescribed,micro_p3_lookup_dir,its,ite,kts,kte,pbuf,lchnk)
 
     ! CALL P3
     !==============
     ! TODO: get proper value for 'it' from time module
+    !KC: initialize some OUT for p3_main (why? 
+    !    -probably it is only partially updated in P3?)
+    !KC: since they are all OUT of p3_main, no need to be in the loop
     precip_liq_surf = 0.0_rtype
     precip_ice_surf = 0.0_rtype
     prec_pcw = 0.0_rtype
@@ -1320,88 +1322,152 @@ end subroutine micro_p3_init
     vap_liq_exchange = 0.0_rtype
 
     call t_startf('micro_p3_tend_loop')
-
-    !KC: make P3 substepping loop here:
     do it = 1, num_steps
 
-      !initialize ptend_loc to 0.0
-      call physics_ptend_init(ptend_loc, psetcols, "micro_p3", &
+        !KC: Note that cld_frac_* is not updated directly 
+        !    in p3_main call, but its inputs are updated.
+        !    therefore, need to get_cloud_fraction in every iteration.
+        if (do_subgrid_clouds) &
+        call get_cloud_fraction(its,ite,kts,kte,& !IN
+		ast(its:ite,kts:kte),cldliq(its:ite,kts:kte), & !IN
+                rain(its:ite,kts:kte),ice(its:ite,kts:kte),precip_frac_method, & !IN
+                cld_frac_i(its:ite,kts:kte),cld_frac_l(its:ite,kts:kte),cld_frac_r(its:ite,kts:kte)) !OUT
+
+    	!KC: though for now do_prescribed_CCN=False, since pbuf is 
+	!modified in P3 iterations, better move this in the loop
+
+        !read in prescribed CCN if log_prescribeCCN is true
+        if (do_prescribed_CCN) call get_prescribed_CCN(nccn_prescribed,micro_p3_lookup_dir,its,ite,kts,kte,pbuf,lchnk)
+        ! KC: do_prescribed_CCN=False
+
+        !KC: mimic MG: initialize ptend_loc to 0.0
+        call physics_ptend_init(ptend_loc, psetcols, "micro_p3", &
                               ls=.true., lq=lq)
 
-      call t_startf('micro_p3_main')
     call p3_main( &
-            cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
-            numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
-            rain(its:ite,kts:kte),       & ! INOUT  rain, mass mixing ratio          kg kg-1
-            numrain(its:ite,kts:kte),    & ! INOUT  rain, number mixing ratio        #  kg-1
-            th(its:ite,kts:kte),         & ! INOUT  potential temperature            K
-            qv(its:ite,kts:kte),         & ! INOUT  water vapor mixing ratio         kg kg-1
-            dtime/num_steps,                       & ! IN     model time step                  s
-            ice(its:ite,kts:kte),        & ! INOUT  ice, total mass mixing ratio     kg kg-1
-            qm(its:ite,kts:kte),      & ! INOUT  ice, rime mass mixing ratio      kg kg-1
-            numice(its:ite,kts:kte),     & ! INOUT  ice, total number mixing ratio   #  kg-1
-            rimvol(its:ite,kts:kte),     & ! INOUT  ice, rime volume mixing ratio    m3 kg-1
-            pres(its:ite,kts:kte),       & ! IN     pressure at cell midpoints       Pa
-            dz(its:ite,kts:kte),        & ! IN     vertical grid spacing            m
-            npccn(its:ite,kts:kte),      & ! IN ccn activation number tendency kg-1 s-1
-            nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration
-            ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1
-            frzimm_in(its:ite,kts:kte), &
-            frzcnt_in(its:ite,kts:kte), & ! IN     CNT coupling
-            frzdep_in(its:ite,kts:kte), &
-            relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance
-            it,                          & ! IN     time step counter NOTE: starts at 1 for first time step
-            precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1
-            precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1
-            its,                         & ! IN     horizontal index lower bound     -
-            ite,                         & ! IN     horizontal index upper bound     -
-            kts,                         & ! IN     vertical index lower bound       -
-            kte,                         & ! IN     vertical index upper bound       -
-            rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m
-            rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m
-            rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3
-            do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
-            do_prescribed_CCN,           & ! IN
-            p3_autocon_coeff,            & ! IN  autoconversion coefficient
-            p3_accret_coeff,             & ! IN  accretion coefficient
-            p3_qc_autocon_expon,         & ! IN  autoconversion qc exponent
-            p3_nc_autocon_expon,         & ! IN  autoconversion nc exponent
-            p3_qc_accret_expon,          & ! IN  autoconversion coefficient
-            p3_wbf_coeff,                & ! IN  WBF process coefficient
-            p3_mincdnc,                  & ! IN  imposing minimal Nc 
-            p3_max_mean_rain_size,       & ! IN  max mean rain size
-            p3_embryonic_rain_size,      & ! IN  embryonic rain size for autoconversion
-            ! AaronDonahue new stuff
-            state%pdel(its:ite,kts:kte), & ! IN pressure level thickness for computing total mass
-            exner(its:ite,kts:kte),      & ! IN exner values
-            qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice 
-            precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow)
-            nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow)
-            qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation
-            precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp 
-            precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
-            rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp 
-            sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
-            cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp
-            cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction
-            cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction
-            cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction
-            tend_out(its:ite,kts:kte,:), & ! OUT p3 microphysics tendencies
-            mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation
-            lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation
-            liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices   
-            vap_liq_exchange(its:ite,kts:kte),& ! OUT sun of vap-liq phase change tendencies
-            vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies
-            qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1
-            t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
-            col_location(its:ite,:3),         & ! IN column locations
-            diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
-            diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
+         cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
+         numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
+         rain(its:ite,kts:kte),       & ! INOUT  rain, mass mixing ratio          kg kg-1
+         numrain(its:ite,kts:kte),    & ! INOUT  rain, number mixing ratio        #  kg-1
+         th(its:ite,kts:kte),         & ! INOUT  potential temperature            K
+         qv(its:ite,kts:kte),         & ! INOUT  water vapor mixing ratio         kg kg-1
+         dtime/num_steps,                       & ! IN     model time step                  s
+         ice(its:ite,kts:kte),        & ! INOUT  ice, total mass mixing ratio     kg kg-1
+         qm(its:ite,kts:kte),      & ! INOUT  ice, rime mass mixing ratio      kg kg-1
+         numice(its:ite,kts:kte),     & ! INOUT  ice, total number mixing ratio   #  kg-1
+         rimvol(its:ite,kts:kte),     & ! INOUT  ice, rime volume mixing ratio    m3 kg-1
+         pres(its:ite,kts:kte),       & ! IN     pressure at cell midpoints       Pa
+         dz(its:ite,kts:kte),        & ! IN     vertical grid spacing            m
+         npccn(its:ite,kts:kte),      & ! IN ccn activation number tendency kg-1 s-1
+         nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration
+         ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1
+         frzimm_in(its:ite,kts:kte), &
+         frzcnt_in(its:ite,kts:kte), & ! IN     CNT coupling
+         frzdep_in(its:ite,kts:kte), &
+         relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance
+         it,                          & ! IN     time step counter NOTE: starts at 1 for first time step
+         precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1
+         precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1
+         its,                         & ! IN     horizontal index lower bound     -
+         ite,                         & ! IN     horizontal index upper bound     -
+         kts,                         & ! IN     vertical index lower bound       -
+         kte,                         & ! IN     vertical index upper bound       -
+         rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m
+         rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m
+         rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3
+         do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
+         do_prescribed_CCN,           & ! IN
+         p3_autocon_coeff,            & ! IN  autoconversion coefficient
+         p3_accret_coeff,             & ! IN  accretion coefficient
+         p3_qc_autocon_expon,         & ! IN  autoconversion qc exponent
+         p3_nc_autocon_expon,         & ! IN  autoconversion nc exponent
+         p3_qc_accret_expon,          & ! IN  autoconversion coefficient
+         p3_wbf_coeff,                & ! IN  WBF process coefficient
+         p3_mincdnc,                  & ! IN  imposing minimal Nc 
+         p3_max_mean_rain_size,       & ! IN  max mean rain size
+         p3_embryonic_rain_size,      & ! IN  embryonic rain size for autoconversion
+         ! AaronDonahue new stuff
+         state%pdel(its:ite,kts:kte), & ! IN pressure level thickness for computing total mass
+         !KC: pdel is not modified in p3_main, so keep using state is fine.
+         exner(its:ite,kts:kte),      & ! IN exner values
+         qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice 
+         precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow)
+         nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow)
+         qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation
+         precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp 
+         precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
+         rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp 
+         sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
+         cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp
+         cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction
+         cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction
+         cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction
+         tend_out(its:ite,kts:kte,:), & ! OUT p3 microphysics tendencies
+         mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation
+         lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation
+         liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices   
+         vap_liq_exchange(its:ite,kts:kte),& ! OUT sun of vap-liq phase change tendencies
+         vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies
+         qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1
+         t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
+         col_location(its:ite,:3),         & ! IN column locations
+         diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
+         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
       !End of call p3_main
-      call t_stopf('micro_p3_main')        
 
+
+    !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
+    !============= 
+
+    !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
+    !they are assigned here. The comments below are a step in that direction.
+
+
+    !cloud_rad_props also uses snow radiative properties which aren't available from 
+    !P3 (perhaps because ice phase in p3 includes *all* ice already?).
+
+    !BACK OUT TENDENCIES FROM STATE CHANGES
+    !=============
+
+
+      !KC: mimic MG: 
+      !Set local tendency: ptend_loc
+    temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
+    ptend_loc%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state_loc%t(:ncol,:pver) )/(dtime/num_steps) 
+    ptend_loc%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state_loc%q(:ncol,:pver,1)         )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state_loc%q(:ncol,:pver,ixcldliq)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state_loc%q(:ncol,:pver,ixnumliq)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state_loc%q(:ncol,:pver,ixrain)    )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state_loc%q(:ncol,:pver,ixnumrain) )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state_loc%q(:ncol,:pver,ixcldice)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state_loc%q(:ncol,:pver,ixnumice)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)     ) - state_loc%q(:ncol,:pver,ixcldrim)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state_loc%q(:ncol,:pver,ixrimvol)  )/(dtime/num_steps)
+
+
+
+      !KC: mimic MG substepping
+      !KC: sum ptend_loc to ptend and then scale ptend when out of loop.
+      !! Sum into overall ptend
+      call physics_ptend_sum(ptend_loc, ptend, ncol)
+
+      !!KC: Update state_loc; 
+      ! Note that ptend_loc is also deallocated here (in physics_update_main)
+      call physics_update(state_loc, ptend_loc, dtime/num_steps)
+
+      !!KC: mimic MG:
+      !! Sum all outputs for averaging.
+      !call post_proc%accumulate()
+      !!KC: I don't think we need this for P3.
+
+      !KC: to-do: deal with pbuf variables.
+
+    end do!KC: end of P3 loop
+
+    call t_stopf('micro_p3_tend_loop')
+
+    !KC: record p3_main_outputs only for the last substep
     p3_main_outputs(:,:,:) = -999._rtype
-      !KC: update p3_main_outputs
     do k = 1,pver
          p3_main_outputs(:ncol,k, 1) = cldliq(:ncol,k)
          p3_main_outputs(:ncol,k, 2) = numliq(:ncol,k)
@@ -1428,73 +1494,27 @@ end subroutine micro_p3_init
          p3_main_outputs(:ncol,k,30) = vap_liq_exchange(:ncol,k)
          p3_main_outputs(:ncol,k,31) = vap_ice_exchange(:ncol,k)
     end do
-      !KC: Q: where are p3_main_outputs(:ncol,k, [13,17,25,26])=-999?
+    !KC: Q: where are p3_main_outputs(:ncol,k, [13,17,25,26])=-999?
     p3_main_outputs(:ncol,1,11) = precip_liq_surf(1)
-      p3_main_outputs(:ncol,1,12) = precip_ice_surf(1)
-      p3_main_outputs(:ncol,pver+1,23) = precip_liq_flux(:ncol,pver+1)
-      p3_main_outputs(:ncol,pver+1,24) = precip_ice_flux(:ncol,pver+1)
-      call outfld('P3_input',  p3_main_inputs,  pcols, lchnk)
-      call outfld('P3_output', p3_main_outputs, pcols, lchnk)
+    p3_main_outputs(:ncol,1,12) = precip_ice_surf(1)
+    p3_main_outputs(:ncol,pver+1,23) = precip_liq_flux(:ncol,pver+1)
+    p3_main_outputs(:ncol,pver+1,24) = precip_ice_flux(:ncol,pver+1)
+    !KC: for now, only record the first p3_main_inputs and last p3_main_outputs
+    call outfld('P3_input',  p3_main_inputs,  pcols, lchnk)
+    call outfld('P3_output', p3_main_outputs, pcols, lchnk)
 
-    !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
-    !============= 
-
-    !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
-    !they are assigned here. The comments below are a step in that direction.
-
-
-    !cloud_rad_props also uses snow radiative properties which aren't available from 
-    !P3 (perhaps because ice phase in p3 includes *all* ice already?).
-
-    !BACK OUT TENDENCIES FROM STATE CHANGES
-    !=============
-
-
-      !KC: mimic MG: 
-      !Set local tendency: ptend_loc
-    temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
-    ptend_loc%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state%t(:ncol,:pver) )/(dtime/num_steps) 
-    ptend_loc%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state%q(:ncol,:pver,1)         )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixcldliq)  )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumliq)  )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state%q(:ncol,:pver,ixrain)    )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state%q(:ncol,:pver,ixnumrain) )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state%q(:ncol,:pver,ixcldice)  )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumice)  )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)     ) - state%q(:ncol,:pver,ixcldrim)  )/(dtime/num_steps)
-    ptend_loc%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/(dtime/num_steps)
-
-
-
-      !KC: mimic MG substepping
-      !KC: sum ptend_loc to ptend and then scale ptend when out of loop.
-      !! Sum into overall ptend
-      call physics_ptend_sum(ptend_loc, ptend, ncol)
-
-      !!KC: Update state; ptend_loc is deallocated here (in the call of physics_update_main)every iteration of P3.
-      call physics_update(state, ptend_loc, dtime/num_steps)
-
-      !!KC: mimic MG:
-      !! Sum all outputs for averaging.
-      !call post_proc%accumulate()
-      !!KC: I don't think we need this for P3.
-
-      !KC: to-do: deal with pbuf variables.
-
-    end do!KC: end of P3 loop
-
-    call t_stopf('micro_p3_tend_loop')
     call t_startf('micro_p3_tend_finish')
    ! Following MG interface as a template:
 
-    !KC: move this part out of the substepping loop as it should remain unchanged during substepping of P3,
-    !    only record t_prev & qv_prev from the last physics time step call of P3
+    !KC: Move this out of the loop as they should remain unchanged 
+    !    during substepping of P3,
+    !    only record t_prev & qv_prev from the last substep of P3
      ! Update t_prev and qv_prev to be used by evap_precip
      t_prev(:ncol,:pver) = temp(:ncol,:pver)
      qv_prev(:ncol,:pver) = qv(:ncol,:pver)
     
 
-    !KC: mimic MG substeps: scale (avg) ptend by 1/num_steps
+    !KC: mimic MG substeps: scale ptend by 1/num_steps
     ! Divide ptend by substeps.
     call physics_ptend_scale(ptend, 1._rtype/num_steps, ncol)
 
@@ -1508,13 +1528,13 @@ end subroutine micro_p3_init
    !KC: to-do avg rain flux
    ! 
 
-   !====================== Export variables/Conservation START ======================!
+!====================== Export variables/Conservation START ======================!
      !For precip, accumulate only total precip in prec_pcw and snow_pcw variables.
     ! Other precip output variables are set to 0
     ! Do not subscript by ncol here, because in physpkg we divide the whole
     ! array and need to avoid an FPE due to uninitialized data.
     !KC: Q: use precip_*_surf from the last substep of P3?
-    !KC: to-do: check how MG does it.
+    !KC: to-do: check if MG avg it for all substeps or only use the last substep.
     prec_pcw = precip_liq_surf + precip_ice_surf
     prec_sed = 0._rtype
     prec_str = prec_pcw + prec_sed
@@ -1522,9 +1542,9 @@ end subroutine micro_p3_init
     snow_pcw = precip_ice_surf
     snow_sed = 0._rtype
     snow_str = snow_pcw + snow_sed
-   !====================== Export variables/Conservation END ======================!
+!====================== Export variables/Conservation END ======================!
 
-   !====================== Radiation Specific Outputs START ======================!
+!====================== Radiation Specific Outputs START ======================!
 
    ! Calculate rho for size distribution
    ! parameter calculations and average it if needed
@@ -1652,21 +1672,21 @@ end subroutine micro_p3_init
            1.5_rtype * 1.e6_rtype
    end where
 
-   !====================== COSP Specific Outputs START ======================!
-   ! LS_FLXPRC, LS_FLXSNW, LS_REFFRAIN, LS_REFFSNOW, CV_REFFLIQ, CV_REFFICE
+!====================== COSP Specific Outputs START ======================!
+! LS_FLXPRC, LS_FLXSNW, LS_REFFRAIN, LS_REFFSNOW, CV_REFFLIQ, CV_REFFICE
    !== Grid-box mean flux_large_scale_cloud at interfaces (kg/m2/s)
-   ! flxprc and flxsnw are used in COSP to compute precipitation fractional
-   ! area and derive precipitation (rain and snow) mixing ratios. Including iflx
-   ! and cflx in precipitation fluxes would result in additional effects of cloud liquid and
-   ! ice on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
-   ! portion of calculations that are handled separately from that of cloud liquid
-   ! and ice. If included, it would not exactly amount to double counting the effect of
-   ! cloud liquid and ice because the mixing ratio derived from iflx and cflx epected to be much smaller
-   ! than the actual grid-mean cldliq and cldice, and rain or snow size distribution
-   ! would be used to compute the lidar/radar signal strength.
-   ! 
-   ! Note that it would need to include iflx and cflx to make the values at surface
-   ! interface consistent with large scale precipitation rates.
+! flxprc and flxsnw are used in COSP to compute precipitation fractional
+! area and derive precipitation (rain and snow) mixing ratios. Including iflx
+! and cflx in precipitation fluxes would result in additional effects of cloud liquid and
+! ice on cosp's smiluated lidar and radar reflectivity signal through the rain/snow
+! portion of calculations that are handled separately from that of cloud liquid
+! and ice. If included, it would not exactly amount to double counting the effect of
+! cloud liquid and ice because the mixing ratio derived from iflx and cflx epected to be much smaller
+! than the actual grid-mean cldliq and cldice, and rain or snow size distribution
+! would be used to compute the lidar/radar signal strength.
+! 
+! Note that it would need to include iflx and cflx to make the values at surface
+! interface consistent with large scale precipitation rates.
 
     ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     flxprc(:ncol,1:top_lev) = 0.0_rtype ! Rain+Snow
@@ -1683,7 +1703,7 @@ end subroutine micro_p3_init
     reffrain(:ncol,top_lev:pver) = reff_rain(:ncol,top_lev:pver)
     reffsnow(:ncol,top_lev:pver) = 1000._rtype !! dummy value, the choice here impacts the COSP output variable: CFAD_DBZE94_CS.  TODO: Figure out if this is ok, change if needed.
 
-   !====================== COSP Specific Outputs  END ======================!
+!====================== COSP Specific Outputs  END ======================!
 
     !WRITE OUTPUT
     !=============
@@ -1739,7 +1759,7 @@ end subroutine micro_p3_init
    call outfld('P3_nr2ni_immers_frz_tend', tend_out(:,:,31), pcols, lchnk) 
    call outfld('P3_nr_ice_shed_tend',     tend_out(:,:,32), pcols, lchnk) 
    call outfld('P3_qc2qr_ice_shed_tend',  tend_out(:,:,33), pcols, lchnk) 
-   !call outfld('P3_qcmul',               tend_out(:,:,34), pcols, lchnk) ! Not actually used, so not actually recorded.  Commented out here for continuity of the array.
+!   call outfld('P3_qcmul',               tend_out(:,:,34), pcols, lchnk) ! Not actually used, so not actually recorded.  Commented out here for continuity of the array.
    call outfld('P3_ncshdc',               tend_out(:,:,35), pcols, lchnk)
    ! sedimentation 
    call outfld('P3_sed_CLDLIQ',           tend_out(:,:,36), pcols, lchnk)
@@ -1777,7 +1797,7 @@ end subroutine micro_p3_init
    call outfld ('LS_REFFRAIN',            reffrain(:,:), pcols, lchnk)
 
    !!KC: mimic MG deallocate state_loc
-   !call physics_state_dealloc(state_loc)
+   call physics_state_dealloc(state_loc)
 
    call t_stopf('micro_p3_tend_finish')
  end subroutine micro_p3_tend
