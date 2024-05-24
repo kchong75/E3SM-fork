@@ -134,6 +134,7 @@ module micro_p3_interface
       p3_embryonic_rain_size   = huge(1.0_rtype)
    
 
+   integer :: num_steps ! Number of P3 substeps
    integer :: ncnst
 
    character(len=8), parameter :: &      ! Constituent names
@@ -157,6 +158,9 @@ subroutine micro_p3_readnl(nlfile)
 
    character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
+   !Namelist variables
+   integer :: p3_num_steps = 1      ! Number of substepping iterations done by P3
+
    ! Local variables
    integer :: unitn, ierr
    character(len=*), parameter :: subname = 'micro_p3_cam_readnl'
@@ -165,7 +169,7 @@ subroutine micro_p3_readnl(nlfile)
          micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
          micro_tend_output, p3_autocon_coeff, p3_qc_autocon_expon, p3_nc_autocon_expon, p3_accret_coeff, &
          p3_qc_accret_expon, p3_wbf_coeff, p3_max_mean_rain_size, p3_embryonic_rain_size, &
-         do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc 
+         do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc, p3_num_steps
 
    !-----------------------------------------------------------------------------
 
@@ -181,6 +185,10 @@ subroutine micro_p3_readnl(nlfile)
       end if
       close(unitn)
       call freeunit(unitn)
+
+      ! set local variables
+      num_steps = p3_num_steps
+
 
       write(iulog,'(A50)') ' ----- P3 Namelist Values: -----'
       write(iulog,'(A29,1x,A19)')  'micro_p3_tableversion: ',   micro_p3_tableversion
@@ -199,6 +207,7 @@ subroutine micro_p3_readnl(nlfile)
       write(iulog,'(A30,1x,8e12.4)') 'p3_embryonic_rain_size',  p3_embryonic_rain_size
       write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
       write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
+      write(iulog,'(A30,1x,I10)')  'p3_num_steps',              p3_num_steps
 
    end if
 
@@ -219,7 +228,8 @@ subroutine micro_p3_readnl(nlfile)
       call mpibcast(p3_max_mean_rain_size,   1 ,                         mpir8,   0, mpicom)
       call mpibcast(p3_embryonic_rain_size,  1 ,                         mpir8,   0, mpicom)
       call mpibcast(do_prescribed_CCN,       1,                          mpilog,  0, mpicom)
-      call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom)
+      call mpibcast(do_Cooper_inP3,          1,                          mpilog,  0, mpicom) 
+      call mpibcast(num_steps,               1 ,                         mpiint,  0, mpicom)
 
    #endif
 
@@ -1101,6 +1111,11 @@ end subroutine micro_p3_init
     real(rtype), parameter :: mucon  = 5.3_rtype            ! Convective size distribution shape parameter
     real(rtype), parameter :: deicon = 50._rtype            ! Convective ice effective diameter (um)
 
+    ! A local copy of state and ptend used in the diagnostic calculationsin in substeping of P3 
+    !KC: in p3, they make local copies of variables directly, so no need to copy the whole state
+    !type(physics_state) :: state_loc 
+    type(physics_ptend) :: ptend_loc
+
     call t_startf('micro_p3_tend_init')
  
     psetcols = state%psetcols
@@ -1166,6 +1181,11 @@ end subroutine micro_p3_init
     ! Some pre-microphysics INITIALIZATION
     !==============
     cldo(:ncol,top_lev:pver)=ast(:ncol,top_lev:pver)
+
+    !KC: probably don't need to make local copy of state_loc
+    !!Initialize local state (state_loc) from input
+    !call physics_state_copy(state, state_loc)
+
     
     ! INITIALIZE PTEND
     !==============
@@ -1300,144 +1320,182 @@ end subroutine micro_p3_init
     call t_startf('micro_p3_tend_loop')
 
     !KC: make P3 substepping loop here:
+    do it = 1, num_steps
 
-    call p3_main( &
-         cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
-         numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
-         rain(its:ite,kts:kte),       & ! INOUT  rain, mass mixing ratio          kg kg-1
-         numrain(its:ite,kts:kte),    & ! INOUT  rain, number mixing ratio        #  kg-1
-         th(its:ite,kts:kte),         & ! INOUT  potential temperature            K
-         qv(its:ite,kts:kte),         & ! INOUT  water vapor mixing ratio         kg kg-1
-         dtime,                       & ! IN     model time step                  s
-         ice(its:ite,kts:kte),        & ! INOUT  ice, total mass mixing ratio     kg kg-1
-         qm(its:ite,kts:kte),      & ! INOUT  ice, rime mass mixing ratio      kg kg-1
-         numice(its:ite,kts:kte),     & ! INOUT  ice, total number mixing ratio   #  kg-1
-         rimvol(its:ite,kts:kte),     & ! INOUT  ice, rime volume mixing ratio    m3 kg-1
-         pres(its:ite,kts:kte),       & ! IN     pressure at cell midpoints       Pa
-         dz(its:ite,kts:kte),        & ! IN     vertical grid spacing            m
-         npccn(its:ite,kts:kte),      & ! IN ccn activation number tendency kg-1 s-1
-         nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration
-         ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1
-         frzimm_in(its:ite,kts:kte), &
-         frzcnt_in(its:ite,kts:kte), & ! IN     CNT coupling
-         frzdep_in(its:ite,kts:kte), &
-         relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance
-         it,                          & ! IN     time step counter NOTE: starts at 1 for first time step
-         precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1
-         precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1
-         its,                         & ! IN     horizontal index lower bound     -
-         ite,                         & ! IN     horizontal index upper bound     -
-         kts,                         & ! IN     vertical index lower bound       -
-         kte,                         & ! IN     vertical index upper bound       -
-         rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m
-         rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m
-         rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3
-         do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
-         do_prescribed_CCN,           & ! IN
-         p3_autocon_coeff,            & ! IN  autoconversion coefficient
-         p3_accret_coeff,             & ! IN  accretion coefficient
-         p3_qc_autocon_expon,         & ! IN  autoconversion qc exponent
-         p3_nc_autocon_expon,         & ! IN  autoconversion nc exponent
-         p3_qc_accret_expon,          & ! IN  autoconversion coefficient
-         p3_wbf_coeff,                & ! IN  WBF process coefficient
-         p3_mincdnc,                  & ! IN  imposing minimal Nc 
-         p3_max_mean_rain_size,       & ! IN  max mean rain size
-         p3_embryonic_rain_size,      & ! IN  embryonic rain size for autoconversion
-         ! AaronDonahue new stuff
-         state%pdel(its:ite,kts:kte), & ! IN pressure level thickness for computing total mass
-         exner(its:ite,kts:kte),      & ! IN exner values
-         qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice 
-         precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow)
-         nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow)
-         qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation
-         precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp 
-         precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
-         rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp 
-         sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
-         cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp
-         cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction
-         cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction
-         cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction
-         tend_out(its:ite,kts:kte,:), & ! OUT p3 microphysics tendencies
-         mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation
-         lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation
-         liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices   
-         vap_liq_exchange(its:ite,kts:kte),& ! OUT sun of vap-liq phase change tendencies
-         vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies
-         qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1
-         t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
-         col_location(its:ite,:3),         & ! IN column locations
-         diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
-         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
-         
+      !initialize ptend_loc to 0.0
+      call physics_ptend_init(ptend_loc, psetcols, "micro_p3", &
+                              ls=.true., lq=lq)
 
-    p3_main_outputs(:,:,:) = -999._rtype
-    do k = 1,pver
-      p3_main_outputs(:ncol,k, 1) = cldliq(:ncol,k)
-      p3_main_outputs(:ncol,k, 2) = numliq(:ncol,k)
-      p3_main_outputs(:ncol,k, 3) = rain(:ncol,k)
-      p3_main_outputs(:ncol,k, 4) = numrain(:ncol,k)
-      p3_main_outputs(:ncol,k, 5) = th(:ncol,k)
-      p3_main_outputs(:ncol,k, 6) = qv(:ncol,k)
-      p3_main_outputs(:ncol,k, 7) = ice(:ncol,k)
-      p3_main_outputs(:ncol,k, 8) = qm(:ncol,k)
-      p3_main_outputs(:ncol,k, 9) = numice(:ncol,k)
-      p3_main_outputs(:ncol,k,10) = rimvol(:ncol,k)
-      p3_main_outputs(:ncol,k,14) = rel(:ncol,k)
-      p3_main_outputs(:ncol,k,15) = rei(:ncol,k)
-      p3_main_outputs(:ncol,k,18) = rho_qi(:ncol,k)
-      p3_main_outputs(:ncol,k,19) = qv2qi_depos_tend(:ncol,k)
-      p3_main_outputs(:ncol,k,20) = precip_total_tend(:ncol,k)
-      p3_main_outputs(:ncol,k,21) = nevapr(:ncol,k)
-      p3_main_outputs(:ncol,k,22) = qr_evap_tend(:ncol,k)
-      p3_main_outputs(:ncol,k,23) = precip_liq_flux(:ncol,k)
-      p3_main_outputs(:ncol,k,24) = precip_ice_flux(:ncol,k)
-      p3_main_outputs(:ncol,k,27) = mu(:ncol,k)
-      p3_main_outputs(:ncol,k,28) = lambdac(:ncol,k)
-      p3_main_outputs(:ncol,k,29) = liq_ice_exchange(:ncol,k)
-      p3_main_outputs(:ncol,k,30) = vap_liq_exchange(:ncol,k)
-      p3_main_outputs(:ncol,k,31) = vap_ice_exchange(:ncol,k)
-    end do
-    p3_main_outputs(:ncol,1,11) = precip_liq_surf(1)
-    p3_main_outputs(:ncol,1,12) = precip_ice_surf(1)
-    p3_main_outputs(:ncol,pver+1,23) = precip_liq_flux(:ncol,pver+1)
-    p3_main_outputs(:ncol,pver+1,24) = precip_ice_flux(:ncol,pver+1)
-    call outfld('P3_input',  p3_main_inputs,  pcols, lchnk)
-    call outfld('P3_output', p3_main_outputs, pcols, lchnk)
+      call t_startf('micro_p3_main')
+      call p3_main( &
+            cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
+            numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
+            rain(its:ite,kts:kte),       & ! INOUT  rain, mass mixing ratio          kg kg-1
+            numrain(its:ite,kts:kte),    & ! INOUT  rain, number mixing ratio        #  kg-1
+            th(its:ite,kts:kte),         & ! INOUT  potential temperature            K
+            qv(its:ite,kts:kte),         & ! INOUT  water vapor mixing ratio         kg kg-1
+            dtime/num_steps,                       & ! IN     model time step                  s
+            ice(its:ite,kts:kte),        & ! INOUT  ice, total mass mixing ratio     kg kg-1
+            qm(its:ite,kts:kte),      & ! INOUT  ice, rime mass mixing ratio      kg kg-1
+            numice(its:ite,kts:kte),     & ! INOUT  ice, total number mixing ratio   #  kg-1
+            rimvol(its:ite,kts:kte),     & ! INOUT  ice, rime volume mixing ratio    m3 kg-1
+            pres(its:ite,kts:kte),       & ! IN     pressure at cell midpoints       Pa
+            dz(its:ite,kts:kte),        & ! IN     vertical grid spacing            m
+            npccn(its:ite,kts:kte),      & ! IN ccn activation number tendency kg-1 s-1
+            nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration
+            ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1
+            frzimm_in(its:ite,kts:kte), &
+            frzcnt_in(its:ite,kts:kte), & ! IN     CNT coupling
+            frzdep_in(its:ite,kts:kte), &
+            relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance
+            it,                          & ! IN     time step counter NOTE: starts at 1 for first time step
+            precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1
+            precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1
+            its,                         & ! IN     horizontal index lower bound     -
+            ite,                         & ! IN     horizontal index upper bound     -
+            kts,                         & ! IN     vertical index lower bound       -
+            kte,                         & ! IN     vertical index upper bound       -
+            rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m
+            rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m
+            rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3
+            do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc
+            do_prescribed_CCN,           & ! IN
+            p3_autocon_coeff,            & ! IN  autoconversion coefficient
+            p3_accret_coeff,             & ! IN  accretion coefficient
+            p3_qc_autocon_expon,         & ! IN  autoconversion qc exponent
+            p3_nc_autocon_expon,         & ! IN  autoconversion nc exponent
+            p3_qc_accret_expon,          & ! IN  autoconversion coefficient
+            p3_wbf_coeff,                & ! IN  WBF process coefficient
+            p3_mincdnc,                  & ! IN  imposing minimal Nc 
+            p3_max_mean_rain_size,       & ! IN  max mean rain size
+            p3_embryonic_rain_size,      & ! IN  embryonic rain size for autoconversion
+            ! AaronDonahue new stuff
+            state%pdel(its:ite,kts:kte), & ! IN pressure level thickness for computing total mass
+            exner(its:ite,kts:kte),      & ! IN exner values
+            qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice 
+            precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow)
+            nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow)
+            qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation
+            precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp 
+            precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
+            rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp 
+            sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp
+            cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp
+            cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction
+            cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction
+            cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction
+            tend_out(its:ite,kts:kte,:), & ! OUT p3 microphysics tendencies
+            mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation
+            lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation
+            liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices   
+            vap_liq_exchange(its:ite,kts:kte),& ! OUT sun of vap-liq phase change tendencies
+            vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies
+            qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1
+            t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
+            col_location(its:ite,:3),         & ! IN column locations
+            diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz]
+            diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz]
+      !End of call p3_main
+      call t_stopf('micro_p3_main')        
 
-    !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
-    !============= 
+      p3_main_outputs(:,:,:) = -999._rtype
+      !KC: update p3_main_outputs
+      do k = 1,pver
+         p3_main_outputs(:ncol,k, 1) = cldliq(:ncol,k)
+         p3_main_outputs(:ncol,k, 2) = numliq(:ncol,k)
+         p3_main_outputs(:ncol,k, 3) = rain(:ncol,k)
+         p3_main_outputs(:ncol,k, 4) = numrain(:ncol,k)
+         p3_main_outputs(:ncol,k, 5) = th(:ncol,k)
+         p3_main_outputs(:ncol,k, 6) = qv(:ncol,k)
+         p3_main_outputs(:ncol,k, 7) = ice(:ncol,k)
+         p3_main_outputs(:ncol,k, 8) = qm(:ncol,k)
+         p3_main_outputs(:ncol,k, 9) = numice(:ncol,k)
+         p3_main_outputs(:ncol,k,10) = rimvol(:ncol,k)
+         p3_main_outputs(:ncol,k,14) = rel(:ncol,k)
+         p3_main_outputs(:ncol,k,15) = rei(:ncol,k)
+         p3_main_outputs(:ncol,k,18) = rho_qi(:ncol,k)
+         p3_main_outputs(:ncol,k,19) = qv2qi_depos_tend(:ncol,k)
+         p3_main_outputs(:ncol,k,20) = precip_total_tend(:ncol,k)
+         p3_main_outputs(:ncol,k,21) = nevapr(:ncol,k)
+         p3_main_outputs(:ncol,k,22) = qr_evap_tend(:ncol,k)
+         p3_main_outputs(:ncol,k,23) = precip_liq_flux(:ncol,k)
+         p3_main_outputs(:ncol,k,24) = precip_ice_flux(:ncol,k)
+         p3_main_outputs(:ncol,k,27) = mu(:ncol,k)
+         p3_main_outputs(:ncol,k,28) = lambdac(:ncol,k)
+         p3_main_outputs(:ncol,k,29) = liq_ice_exchange(:ncol,k)
+         p3_main_outputs(:ncol,k,30) = vap_liq_exchange(:ncol,k)
+         p3_main_outputs(:ncol,k,31) = vap_ice_exchange(:ncol,k)
+      end do
+      !KC: Q: where are p3_main_outputs(:ncol,k, [13,17,25,26])=-999?
+      p3_main_outputs(:ncol,1,11) = precip_liq_surf(1)
+      p3_main_outputs(:ncol,1,12) = precip_ice_surf(1)
+      p3_main_outputs(:ncol,pver+1,23) = precip_liq_flux(:ncol,pver+1)
+      p3_main_outputs(:ncol,pver+1,24) = precip_ice_flux(:ncol,pver+1)
+      call outfld('P3_input',  p3_main_inputs,  pcols, lchnk)
+      call outfld('P3_output', p3_main_outputs, pcols, lchnk)
 
-    !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
-    !they are assigned here. The comments below are a step in that direction.
+      !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
+      !============= 
+
+      !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
+      !they are assigned here. The comments below are a step in that direction.
 
 
-    !cloud_rad_props also uses snow radiative properties which aren't available from 
-    !P3 (perhaps because ice phase in p3 includes *all* ice already?).
+      !cloud_rad_props also uses snow radiative properties which aren't available from 
+      !P3 (perhaps because ice phase in p3 includes *all* ice already?).
 
-    !BACK OUT TENDENCIES FROM STATE CHANGES
-    !=============
-    temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
-    ptend%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state%t(:ncol,:pver) )/dtime 
-    ptend%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state%q(:ncol,:pver,1)         )/dtime
-    ptend%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixcldliq)  )/dtime
-    ptend%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumliq)  )/dtime
-    ptend%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state%q(:ncol,:pver,ixrain)    )/dtime
-    ptend%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state%q(:ncol,:pver,ixnumrain) )/dtime
-    ptend%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state%q(:ncol,:pver,ixcldice)  )/dtime
-    ptend%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumice)  )/dtime
-    ptend%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)  ) - state%q(:ncol,:pver,ixcldrim)  )/dtime
-    ptend%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/dtime
+      !BACK OUT TENDENCIES FROM STATE CHANGES
+      !=============
 
+
+      !KC: mimic MG: 
+      !Set local tendency: ptend_loc
+      temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
+      ptend_loc%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state%t(:ncol,:pver) )/(dtime/num_steps) 
+      ptend_loc%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state%q(:ncol,:pver,1)         )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixcldliq)  )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumliq)  )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state%q(:ncol,:pver,ixrain)    )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state%q(:ncol,:pver,ixnumrain) )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state%q(:ncol,:pver,ixcldice)  )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumice)  )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)     ) - state%q(:ncol,:pver,ixcldrim)  )/(dtime/num_steps)
+      ptend_loc%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/(dtime/num_steps)
+
+
+
+      !KC: mimic MG substepping
+      !KC: sum ptend_loc to ptend and then scale ptend when out of loop.
+      !! Sum into overall ptend
+      call physics_ptend_sum(ptend_loc, ptend, ncol)
+
+      !!KC: Update state; ptend_loc is deallocated here (in the call of physics_update_main)every iteration of P3.
+      call physics_update(state, ptend_loc, dtime/num_steps)
+
+      !!KC: mimic MG:
+      !! Sum all outputs for averaging.
+      !call post_proc%accumulate()
+      !!KC: I don't think we need this for P3.
+
+      !KC: to-do: deal with pbuf variables.
+
+    end do!KC: end of P3 loop
+
+    call t_stopf('micro_p3_tend_loop')
+
+    !KC: move this part out of the substepping loop as it should remain unchanged during substepping of P3,
+    !    only record t_prev & qv_prev from the last physics time step call of P3
     ! Update t_prev and qv_prev to be used by evap_precip
     t_prev(:ncol,:pver) = temp(:ncol,:pver)
     qv_prev(:ncol,:pver) = qv(:ncol,:pver)
-
-    !KC: need to add ptend_sum/scale and accumlate.
-
-    !KC: end of P3 loop
-    call t_stopf('micro_p3_tend_loop')
+    
     call t_startf('micro_p3_tend_finish')
+
+    !KC: mimic MG substeps: scale (avg) ptend by 1/num_steps
+    ! Divide ptend by substeps.
+    call physics_ptend_scale(ptend, 1._r8/num_steps, ncol)
+
+
    ! Following MG interface as a template:
 
     ! Net micro_p3 condensation rate
@@ -1455,6 +1513,8 @@ end subroutine micro_p3_init
     ! Other precip output variables are set to 0
     ! Do not subscript by ncol here, because in physpkg we divide the whole
     ! array and need to avoid an FPE due to uninitialized data.
+    !KC: Q: use precip_*_surf from the last substep of P3?
+    !KC: -check how MG does it.
     prec_pcw = precip_liq_surf + precip_ice_surf
     prec_sed = 0._rtype
     prec_str = prec_pcw + prec_sed
@@ -1716,6 +1776,8 @@ end subroutine micro_p3_init
    call outfld ('LS_FLXSNW',              flxsnw(:,:), pcols, lchnk)
    call outfld ('LS_REFFRAIN',            reffrain(:,:), pcols, lchnk)
 
+   !!KC: mimic MG deallocate state_loc
+   !call physics_state_dealloc(state_loc)
 
    call t_stopf('micro_p3_tend_finish')
  end subroutine micro_p3_tend

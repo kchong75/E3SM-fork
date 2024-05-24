@@ -2055,7 +2055,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_qr,              packed_qs,              &
                  packed_nr,              packed_ns,              &
                  packed_relvar,          packed_accre_enhan,     &
-		 precip_off,                                     &
+		           precip_off,                                     &
                  packed_p,               packed_pdel,            &
                  packed_cldn,    packed_liqcldf, packed_icecldf, &
                  packed_rate1ord_cw2pr_st,                       &
