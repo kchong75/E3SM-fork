@@ -19,7 +19,9 @@ module micro_p3_interface
 
   use physics_types,  only: physics_state, &
                             physics_ptend, &
-                            physics_ptend_init
+                            physics_ptend_init, &
+                            physics_ptend_sum, physics_ptend_scale
+  use physics_update_mod, only: physics_update
   use physconst,      only: mwdry, cpair, mwh2o, gravit, rair, cpliq, pi, &
                             rh2o, latvap, latice, tmelt, rhoh2o, rairv 
   use constituents,   only: cnst_add, pcnst, sflxnam, apcnst, bpcnst, pcnst,&
@@ -152,26 +154,26 @@ module micro_p3_interface
 !===============================================================================
 subroutine micro_p3_readnl(nlfile)
 
-   use namelist_utils,  only: find_group_name
-   use units,           only: getunit, freeunit
-   use mpishorthand
+  use namelist_utils,  only: find_group_name
+  use units,           only: getunit, freeunit
+  use mpishorthand
 
-   character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
+  character(len=*), intent(in) :: nlfile  ! filepath for file containing namelist input
 
-   !Namelist variables
-   integer :: p3_num_steps = 1      ! Number of substepping iterations done by P3
+  !Namelist variables
+  integer :: p3_num_steps = 1      ! Number of substepping iterations done by P3
 
-   ! Local variables
-   integer :: unitn, ierr
-   character(len=*), parameter :: subname = 'micro_p3_cam_readnl'
+  ! Local variables
+  integer :: unitn, ierr
+  character(len=*), parameter :: subname = 'micro_p3_cam_readnl'
 
-   namelist /micro_nl/ &
-         micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
-         micro_tend_output, p3_autocon_coeff, p3_qc_autocon_expon, p3_nc_autocon_expon, p3_accret_coeff, &
-         p3_qc_accret_expon, p3_wbf_coeff, p3_max_mean_rain_size, p3_embryonic_rain_size, &
-         do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc, p3_num_steps
+  namelist /micro_nl/ &
+       micro_p3_tableversion, micro_p3_lookup_dir, micro_aerosolactivation, micro_subgrid_cloud, &
+       micro_tend_output, p3_autocon_coeff, p3_qc_autocon_expon, p3_nc_autocon_expon, p3_accret_coeff, &
+       p3_qc_accret_expon, p3_wbf_coeff, p3_max_mean_rain_size, p3_embryonic_rain_size, &
+       do_prescribed_CCN, do_Cooper_inP3, p3_mincdnc, p3_num_steps
 
-   !-----------------------------------------------------------------------------
+  !-----------------------------------------------------------------------------
 
    if (masterproc) then
       unitn = getunit()
@@ -186,28 +188,28 @@ subroutine micro_p3_readnl(nlfile)
       close(unitn)
       call freeunit(unitn)
 
-      ! set local variables
-      num_steps = p3_num_steps
+     ! set local variables
+     num_steps = p3_num_steps
 
 
-      write(iulog,'(A50)') ' ----- P3 Namelist Values: -----'
-      write(iulog,'(A29,1x,A19)')  'micro_p3_tableversion: ',   micro_p3_tableversion
-      write(iulog,'(A20,1x,A100)') 'micro_p3_lookup_dir: ',     micro_p3_lookup_dir
-      write(iulog,'(A30,1x,L)')    'micro_aerosolactivation: ', micro_aerosolactivation
-      write(iulog,'(A30,1x,L)')    'micro_subgrid_cloud: ',     micro_subgrid_cloud
-      write(iulog,'(A30,1x,L)')    'micro_tend_output: ',       micro_tend_output
-      write(iulog,'(A30,1x,8e12.4)') 'p3_autocon_coeff',        p3_autocon_coeff
-      write(iulog,'(A30,1x,8e12.4)') 'p3_accret_coeff',         p3_accret_coeff
-      write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',     p3_qc_autocon_expon
-      write(iulog,'(A30,1x,8e12.4)') 'p3_nc_autocon_expon',     p3_nc_autocon_expon
-      write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',      p3_qc_accret_expon
-      write(iulog,'(A30,1x,8e12.4)') 'p3_wbf_coeff',            p3_wbf_coeff
-      write(iulog,'(A30,1x,8e12.4)') 'p3_mincdnc',              p3_mincdnc 
-      write(iulog,'(A30,1x,8e12.4)') 'p3_max_mean_rain_size',   p3_max_mean_rain_size
-      write(iulog,'(A30,1x,8e12.4)') 'p3_embryonic_rain_size',  p3_embryonic_rain_size
-      write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
-      write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
-      write(iulog,'(A30,1x,I10)')  'p3_num_steps',              p3_num_steps
+     write(iulog,'(A50)') ' ----- P3 Namelist Values: -----'
+     write(iulog,'(A29,1x,A19)')  'micro_p3_tableversion: ',   micro_p3_tableversion
+     write(iulog,'(A20,1x,A100)') 'micro_p3_lookup_dir: ',     micro_p3_lookup_dir
+     write(iulog,'(A30,1x,L)')    'micro_aerosolactivation: ', micro_aerosolactivation
+     write(iulog,'(A30,1x,L)')    'micro_subgrid_cloud: ',     micro_subgrid_cloud
+     write(iulog,'(A30,1x,L)')    'micro_tend_output: ',       micro_tend_output
+     write(iulog,'(A30,1x,8e12.4)') 'p3_autocon_coeff',        p3_autocon_coeff
+     write(iulog,'(A30,1x,8e12.4)') 'p3_accret_coeff',         p3_accret_coeff
+     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_autocon_expon',     p3_qc_autocon_expon
+     write(iulog,'(A30,1x,8e12.4)') 'p3_nc_autocon_expon',     p3_nc_autocon_expon
+     write(iulog,'(A30,1x,8e12.4)') 'p3_qc_accret_expon',      p3_qc_accret_expon
+     write(iulog,'(A30,1x,8e12.4)') 'p3_wbf_coeff',            p3_wbf_coeff
+     write(iulog,'(A30,1x,8e12.4)') 'p3_mincdnc',              p3_mincdnc 
+     write(iulog,'(A30,1x,8e12.4)') 'p3_max_mean_rain_size',   p3_max_mean_rain_size
+     write(iulog,'(A30,1x,8e12.4)') 'p3_embryonic_rain_size',  p3_embryonic_rain_size
+     write(iulog,'(A30,1x,L)')    'do_prescribed_CCN: ',       do_prescribed_CCN
+     write(iulog,'(A30,1x,L)')    'do_Cooper_inP3: ',          do_Cooper_inP3
+     write(iulog,'(A30,1x,I10)')  'p3_num_steps',              p3_num_steps
 
    end if
 
@@ -234,7 +236,7 @@ subroutine micro_p3_readnl(nlfile)
    #endif
 
    ! Check to make sure p3 table version is valid
-   select case (trim(micro_p3_tableversion))
+  select case (trim(micro_p3_tableversion))
       case ('4')
          ! Version 4 is valid
       case ('4.1')
@@ -261,7 +263,7 @@ subroutine micro_p3_readnl(nlfile)
       end subroutine bad_version_endrun
 
 end subroutine micro_p3_readnl
-!================================================================================================
+  !================================================================================================
 
 subroutine micro_p3_register()
 
@@ -1327,7 +1329,7 @@ end subroutine micro_p3_init
                               ls=.true., lq=lq)
 
       call t_startf('micro_p3_main')
-      call p3_main( &
+    call p3_main( &
             cldliq(its:ite,kts:kte),     & ! INOUT  cloud, mass mixing ratio         kg kg-1
             numliq(its:ite,kts:kte),     & ! INOUT  cloud, number mixing ratio       #  kg-1
             rain(its:ite,kts:kte),       & ! INOUT  rain, mass mixing ratio          kg kg-1
@@ -1398,9 +1400,9 @@ end subroutine micro_p3_init
       !End of call p3_main
       call t_stopf('micro_p3_main')        
 
-      p3_main_outputs(:,:,:) = -999._rtype
+    p3_main_outputs(:,:,:) = -999._rtype
       !KC: update p3_main_outputs
-      do k = 1,pver
+    do k = 1,pver
          p3_main_outputs(:ncol,k, 1) = cldliq(:ncol,k)
          p3_main_outputs(:ncol,k, 2) = numliq(:ncol,k)
          p3_main_outputs(:ncol,k, 3) = rain(:ncol,k)
@@ -1425,42 +1427,42 @@ end subroutine micro_p3_init
          p3_main_outputs(:ncol,k,29) = liq_ice_exchange(:ncol,k)
          p3_main_outputs(:ncol,k,30) = vap_liq_exchange(:ncol,k)
          p3_main_outputs(:ncol,k,31) = vap_ice_exchange(:ncol,k)
-      end do
+    end do
       !KC: Q: where are p3_main_outputs(:ncol,k, [13,17,25,26])=-999?
-      p3_main_outputs(:ncol,1,11) = precip_liq_surf(1)
+    p3_main_outputs(:ncol,1,11) = precip_liq_surf(1)
       p3_main_outputs(:ncol,1,12) = precip_ice_surf(1)
       p3_main_outputs(:ncol,pver+1,23) = precip_liq_flux(:ncol,pver+1)
       p3_main_outputs(:ncol,pver+1,24) = precip_ice_flux(:ncol,pver+1)
       call outfld('P3_input',  p3_main_inputs,  pcols, lchnk)
       call outfld('P3_output', p3_main_outputs, pcols, lchnk)
 
-      !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
-      !============= 
+    !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
+    !============= 
 
-      !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
-      !they are assigned here. The comments below are a step in that direction.
+    !TODO: figure out what else other E3SM parameterizations need from micro and make sure 
+    !they are assigned here. The comments below are a step in that direction.
 
 
-      !cloud_rad_props also uses snow radiative properties which aren't available from 
-      !P3 (perhaps because ice phase in p3 includes *all* ice already?).
+    !cloud_rad_props also uses snow radiative properties which aren't available from 
+    !P3 (perhaps because ice phase in p3 includes *all* ice already?).
 
-      !BACK OUT TENDENCIES FROM STATE CHANGES
-      !=============
+    !BACK OUT TENDENCIES FROM STATE CHANGES
+    !=============
 
 
       !KC: mimic MG: 
       !Set local tendency: ptend_loc
-      temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
-      ptend_loc%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state%t(:ncol,:pver) )/(dtime/num_steps) 
-      ptend_loc%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state%q(:ncol,:pver,1)         )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixcldliq)  )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumliq)  )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state%q(:ncol,:pver,ixrain)    )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state%q(:ncol,:pver,ixnumrain) )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state%q(:ncol,:pver,ixcldice)  )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumice)  )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)     ) - state%q(:ncol,:pver,ixcldrim)  )/(dtime/num_steps)
-      ptend_loc%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/(dtime/num_steps)
+    temp(:ncol,:pver) = th(:ncol,:pver)/exner(:ncol,:pver) 
+    ptend_loc%s(:ncol,:pver)           = cpair*( temp(:ncol,:pver) - state%t(:ncol,:pver) )/(dtime/num_steps) 
+    ptend_loc%q(:ncol,:pver,1)         = ( max(0._rtype,qv(:ncol,:pver)     ) - state%q(:ncol,:pver,1)         )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldliq)  = ( max(0._rtype,cldliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixcldliq)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumliq)  = ( max(0._rtype,numliq(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumliq)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixrain)    = ( max(0._rtype,rain(:ncol,:pver)   ) - state%q(:ncol,:pver,ixrain)    )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumrain) = ( max(0._rtype,numrain(:ncol,:pver)) - state%q(:ncol,:pver,ixnumrain) )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldice)  = ( max(0._rtype,ice(:ncol,:pver)    ) - state%q(:ncol,:pver,ixcldice)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixnumice)  = ( max(0._rtype,numice(:ncol,:pver) ) - state%q(:ncol,:pver,ixnumice)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)     ) - state%q(:ncol,:pver,ixcldrim)  )/(dtime/num_steps)
+    ptend_loc%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/(dtime/num_steps)
 
 
 
@@ -1482,30 +1484,28 @@ end subroutine micro_p3_init
     end do!KC: end of P3 loop
 
     call t_stopf('micro_p3_tend_loop')
+    call t_startf('micro_p3_tend_finish')
+   ! Following MG interface as a template:
 
     !KC: move this part out of the substepping loop as it should remain unchanged during substepping of P3,
     !    only record t_prev & qv_prev from the last physics time step call of P3
-    ! Update t_prev and qv_prev to be used by evap_precip
-    t_prev(:ncol,:pver) = temp(:ncol,:pver)
-    qv_prev(:ncol,:pver) = qv(:ncol,:pver)
+     ! Update t_prev and qv_prev to be used by evap_precip
+     t_prev(:ncol,:pver) = temp(:ncol,:pver)
+     qv_prev(:ncol,:pver) = qv(:ncol,:pver)
     
-    call t_startf('micro_p3_tend_finish')
 
     !KC: mimic MG substeps: scale (avg) ptend by 1/num_steps
     ! Divide ptend by substeps.
-    call physics_ptend_scale(ptend, 1._r8/num_steps, ncol)
+    call physics_ptend_scale(ptend, 1._rtype/num_steps, ncol)
 
 
-   ! Following MG interface as a template:
 
     ! Net micro_p3 condensation rate
     qme(:ncol,top_lev:pver) = cmeliq(:ncol,top_lev:pver) + qv2qi_depos_tend(:ncol,top_lev:pver)  ! qv2qi_depos_tend is output from p3 micro
     ! Add cmeliq to  vap_liq_exchange
     vap_liq_exchange(:ncol,top_lev:pver) = vap_liq_exchange(:ncol,top_lev:pver) + cmeliq(:ncol,top_lev:pver) 
 
-   !KC: avg rain flux
-   ! declare a loc variable for this to accumulate.
-   ! ptend & state reference to mg code;
+   !KC: to-do avg rain flux
    ! 
 
    !====================== Export variables/Conservation START ======================!
@@ -1514,7 +1514,7 @@ end subroutine micro_p3_init
     ! Do not subscript by ncol here, because in physpkg we divide the whole
     ! array and need to avoid an FPE due to uninitialized data.
     !KC: Q: use precip_*_surf from the last substep of P3?
-    !KC: -check how MG does it.
+    !KC: to-do: check how MG does it.
     prec_pcw = precip_liq_surf + precip_ice_surf
     prec_sed = 0._rtype
     prec_str = prec_pcw + prec_sed
