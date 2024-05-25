@@ -2481,7 +2481,7 @@ subroutine tphysbc (ztodt,               &
     tend %dudt(:ncol,:pver)  = 0._r8
     tend %dvdt(:ncol,:pver)  = 0._r8
 
-   !!== KZ_WCON
+!!== KZ_WCON
     call check_qflx (state, tend, "PHYBC01", nstep, ztodt, cam_in%cflx(:,1))
     call check_water(state, tend, "PHYBC01", nstep, ztodt)
 
@@ -2512,7 +2512,7 @@ subroutine tphysbc (ztodt,               &
 
     end if 
 
-   !!== KZ_WCON
+!!== KZ_WCON
 
     ! Validate state coming from the dynamics.
     if (state_debug_checks) &
@@ -2520,7 +2520,7 @@ subroutine tphysbc (ztodt,               &
 
     call clybry_fam_adj( ncol, lchnk, map2chm, state%q, pbuf )
 
-   !!== KZ_WCON
+!!== KZ_WCON
 
     if(use_mass_borrower) then
 
@@ -2551,7 +2551,7 @@ subroutine tphysbc (ztodt,               &
 
 
     call check_water(state, tend, "PHYBC02", nstep, ztodt)
-   !!== KZ_WCON
+!!== KZ_WCON
 
     ! Validate output of clybry_fam_adj.
     if (state_debug_checks) &
@@ -2819,19 +2819,19 @@ subroutine tphysbc (ztodt,               &
                   det_ice/cld_macmic_num_steps, flx_heat/cld_macmic_num_steps)
        
           else ! Calculate CLUBB macrophysics
-               !!== KZ_WATCON 
+!!== KZ_WATCON 
 
-               !! qqflx fixer to avoid negative water vapor in the surface layer
-               !! due to strong negative qflx  
-               !!.................................................................
+    !! qqflx fixer to avoid negative water vapor in the surface layer
+    !! due to strong negative qflx  
+    !!.................................................................
 
-               if(use_qqflx_fixer) then
-                  call qqflx_fixer('TPHYSBC ', lchnk, ncol, cld_macmic_ztodt, &
-                     state%q(1,1,1), state%rpdel(1,1), cam_in%shf, &
-                     cam_in%lhf , cam_in%cflx/cld_macmic_num_steps )
+    if(use_qqflx_fixer) then
+       call qqflx_fixer('TPHYSBC ', lchnk, ncol, cld_macmic_ztodt, &
+            state%q(1,1,1), state%rpdel(1,1), cam_in%shf, &
+            cam_in%lhf , cam_in%cflx/cld_macmic_num_steps )
 
-               end if
-               !!== KZ_WATCON 
+    end if
+!!== KZ_WATCON 
 
                ! =====================================================
                !    CLUBB call (PBL, shallow convection, macrophysics)

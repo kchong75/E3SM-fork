@@ -20,7 +20,8 @@ module micro_p3_interface
   use physics_types,  only: physics_state, &
                             physics_ptend, &
                             physics_ptend_init, &
-                            physics_ptend_sum, physics_ptend_scale
+                            physics_ptend_sum, physics_ptend_scale, &
+                            physics_state_dealloc, physics_state_copy
   use physics_update_mod, only: physics_update
   use physconst,      only: mwdry, cpair, mwh2o, gravit, rair, cpliq, pi, &
                             rh2o, latvap, latice, tmelt, rhoh2o, rairv 

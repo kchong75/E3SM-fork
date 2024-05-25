@@ -400,7 +400,6 @@ contains
     end if
 
     if (ptend%ls .or. ptend%lq(1)) then
-    !KC: necessary to be updated in the loop; 
       call geopotential_t(state%lnpint, state%lnpmid  ,&
                           state%pint  , state%pmid    ,&
                           state%pdel  , state%rpdel   ,&
