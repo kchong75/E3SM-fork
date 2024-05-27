@@ -1128,7 +1128,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
 
    real(r8), target :: rate1cld(state%psetcols,pver) ! array to hold rate1ord_cw2pr_st from microphysics
 
-   real(r8), target :: tlat(state%psetcols,pver)
+   real(r8), target :: tlat(state%psetcols,pver) !latent heating rate (W/kg)
    real(r8), target :: qvlat(state%psetcols,pver)
    real(r8), target :: qcten(state%psetcols,pver)
    real(r8), target :: qiten(state%psetcols,pver)
@@ -2224,6 +2224,9 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                               ls=.true., lq=lq) !lq: changing cld/precip/
 
       ! Set local tendency.
+      !KC: upack(self, packed, fill): unpacked filled with fill
+      !Q: What does different fill mean, why some use 0, 
+      !   but for numliq/numice, it will return to 0 if unpacked?
       ptend_loc%s               = packer%unpack(packed_tlat, 0._r8)
       ptend_loc%q(:,:,1)        = packer%unpack(packed_qvlat, 0._r8)
       ptend_loc%q(:,:,ixcldliq) = packer%unpack(packed_qctend, 0._r8)
