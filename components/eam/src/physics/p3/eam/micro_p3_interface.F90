@@ -830,10 +830,10 @@ end subroutine micro_p3_readnl
   !================================================================================================
     subroutine get_cloud_fraction(its,ite,kts,kte,ast,qc,qr,qi,method, &
                   cld_frac_i,cld_frac_l,cld_frac_r)
-       !KC: this is a private subroutine for p3, I think it wrapped some of the calc in MG into a func.
-       ! in MG, they have: 
-       !    icecldf(:ncol,top_lev:pver) = ast(:ncol,top_lev:pver)
-       !    liqcldf(:ncol,top_lev:pver) = ast(:ncol,top_lev:pver)
+       !KC: this is a private subroutine for p3, to calculate cld_frac_i[l] and cld_frac_r;
+       ! for cld_frac_l[i], their calculation are only related to ast, which is not changed by p3, 
+       ! so they won't change with qc(cldliq), qr(rain), qi(ice), which are updated during p3 substepping.
+       ! for cld_frac_r, it will change with changing qc, qr, and qi
       
        use micro_p3_utils, only: mincld, qsmall
 
@@ -1017,6 +1017,8 @@ end subroutine micro_p3_readnl
     real(rtype) :: precip_ice_flux(pcols,pver+1)     !grid-box average ice/snow flux (kg m^-2s^-1) pverp
     real(rtype) :: rflx(pcols,pver+1)     !grid-box average rain flux (kg m^-2s^-1) pverp
     real(rtype) :: sflx(pcols,pver+1)     !grid-box average ice/snow flux (kg m^-2s^-1) pverp
+    !KC: in MG they have cflx (grid-box avg liq condensate flux [kg m^-2 s^-1])
+    !Q: what is pverp???
     real(rtype) :: cflx(pcols,pver+1)     !grid-box average cloud flux (kg m^-2s^-1) pverp
     real(rtype) :: exner(pcols,pver)      !exner formula for converting between potential and normal temp
     real(rtype) :: cld_frac_r(pcols,pver)      !rain cloud fraction
@@ -1030,6 +1032,23 @@ end subroutine micro_p3_readnl
 
     !Prescribed CCN concentration
     real(rtype), dimension(pcols,pver) :: nccn_prescribed
+
+
+    !KC for use of P3 substepping:
+    !for use in P3 substepping
+    real(rtype) :: precip_liq_surf_prev(pcols)
+    real(rtype) :: precip_ice_surf_prev(pcols)
+    real(rtype) :: qv2qi_depos_tend_prev(pcols, pver)
+    real(rtype) :: precip_liq_flux_prev(pcols, pver+1)
+    real(rtype) :: precip_ice_flux_prev(pcols, pver+1)
+    real(rtype) :: rflx_prev(pcols, pver+1)
+    real(rtype) :: sflx_prev(pcols, pver+1)
+    real(rtype) :: cflx_prev(pcols, pver+1)
+    real(rtype), dimension(pcols, pver) :: liq_ice_exchange_prev
+    real(rtype), dimension(pcols, pver) :: vap_liq_exchange_prev
+    real(rtype), dimension(pcols, pver) :: vap_ice_exchange_prev
+    !KC: to-do: for pbuf variables, need to know the size!
+    real(rtype) :: precip_total_tend_prev(*,*), nevapr_prev(*,*)
 
     ! PBUF Variables
     real(rtype), pointer :: ast(:,:)      ! Relative humidity cloud fraction
@@ -1290,6 +1309,16 @@ end subroutine micro_p3_readnl
     cld_frac_r(:,:) = 1.0_rtype
     do_subgrid_clouds = micro_subgrid_cloud
     !KC: do_subgrid_clouds=T
+        !KC: Note that cld_frac_* are inputs for p3_main, not changed by p3_main,
+        !    but its inputs (cldliq, rain, ice ) are updated.
+        !KC: to mimic MG, it seems that cld_frac_* should remain unchanged in the substepping of P3
+        !    moreover, in other places of usages, should also be unchanged. More notes below.
+        
+    if (do_subgrid_clouds) &
+    call get_cloud_fraction(its,ite,kts,kte,& !IN
+             ast(its:ite,kts:kte),cldliq(its:ite,kts:kte), & !IN
+             rain(its:ite,kts:kte),ice(its:ite,kts:kte),precip_frac_method, & !IN
+             cld_frac_i(its:ite,kts:kte),cld_frac_l(its:ite,kts:kte),cld_frac_r(its:ite,kts:kte)) !OUT
     call t_stopf('micro_p3_tend_init')
 
     p3_main_inputs(:,:,:) = -999._rtype
@@ -1334,16 +1363,6 @@ end subroutine micro_p3_readnl
     call t_startf('micro_p3_tend_loop')
     do it_p3 = 1, num_steps
 
-        !KC: Note that cld_frac_* are inputs for p3_main, not changed by p3_main,
-        !    but its inputs (cldliq, rain, ice ) are updated.
-        !    therefore, need to get_cloud_fraction in every iteration of P3. <- okay, this is almost true.
-        ! to-do: mimic MG: check how MG calculate subgrid_clouds, are they updated with subsycles or are they unchanged?
-        if (do_subgrid_clouds) &
-        call get_cloud_fraction(its,ite,kts,kte,& !IN
-                ast(its:ite,kts:kte),cldliq(its:ite,kts:kte), & !IN
-                rain(its:ite,kts:kte),ice(its:ite,kts:kte),precip_frac_method, & !IN
-                cld_frac_i(its:ite,kts:kte),cld_frac_l(its:ite,kts:kte),cld_frac_r(its:ite,kts:kte)) !OUT
-
         !KC: mimic MG: initialize ptend_loc to 0.0
         call physics_ptend_init(ptend_loc, psetcols, "micro_p3", &
                               ls=.true., lq=lq)
@@ -1374,16 +1393,17 @@ end subroutine micro_p3_readnl
          ! Both (only) used in calc of prec_str and snow_str later out of the loop
          ! mimic MG: need to use avg rate, aka, accum_mean
          ! to-do: how to accum_mean?
-         precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1 -> checked
-         precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1 -> checked
+         precip_liq_surf(its:ite),            & ! OUT    surface liquid precip rate       m s-1 -> accum_mean
+         precip_ice_surf(its:ite),            & ! OUT    surface frozen precip rate       m s-1 -> accum_mean
          its,                         & ! IN     horizontal index lower bound     - !KC: unchanged during subsycle -> checked
-         ite,                         & ! IN     horizontal index upper bound     - <- state_loc, should be unchanged during subcycle -> checked
+         ite,                         & ! IN     horizontal index upper bound     - <- state_loc, unchanged during subcycle -> checked
          kts,                         & ! IN     vertical index lower bound       - !KC: unchanged during subsycle -> checked
-         kte,                         & ! IN     vertical index upper bound       - <- pver, should be unchanged during subcycle -> checked
+         kte,                         & ! IN     vertical index upper bound       - <- pver, unchanged during subcycle -> checked
          !KC: rel & rei are size related parameters
-         !mimic MG: in MG it uses snapshot of last call of MG for them, so don't need to accumulated and avg here.
-         rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m <- pbuf, accum_null -> checked
-         rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m <- pbuf, accum_null -> checked
+         !mimic MG: in MG it uses snapshot of last call of MG for them, so don't need to accumulate then avg here.
+         !  accum_null means to use the snapshot from last substep, so don't need to further change the code.
+         rel(its:ite,kts:kte),        & ! OUT    effective radius, cloud          m <- pbuf -> accum_null -> checked
+         rei(its:ite,kts:kte),        & ! OUT    effective radius, ice            m <- pbuf -> accum_null -> checked
          rho_qi(its:ite,kts:kte),  & ! OUT    bulk density of ice              kg m-3 !KC: local var, seems not used.. -> checked
          !KC: these flags are from nl and not changed -> checked
          do_predict_nc,               & ! IN     .true.=prognostic Nc, .false.=specified Nc 
@@ -1402,57 +1422,103 @@ end subroutine micro_p3_readnl
          !KC: pdel is not modified in p3_main, so keep using state is fine, but may want to use state_loc: 
          ! 1. to test if state_loc is correctly updated; 
          exner(its:ite,kts:kte),      & ! IN exner values <- derived var not changed -> checked
-         !KC: mimic MG: in MG, it is cmeiout, accum_mean
-         qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice !KC: local var -> accum_mean
-         !KC: mimic MG: in MG, it is prain(from pbuf), accum_mean
-         precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow) <- pbuf -> accum_mean 
-         !KC: mimic MG: in MG, it is nevapr (from pbuf),accum_mean
-         nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow) <- pbuf -> accum_mean
-         !KC: mimic MG, accum_null for prer_evap (precipitation evaporation rate)
-         qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation <- pbuf, accum_null -> checked
-         !KC: mimic MG: precip_*_flux are grid-box avg rain [ice/snow] fluxes,
-         !  in MG, they are rflx (grid-box average rain flux [kg m^-2 s^-1]) and 
-         !  sflx (grid-box average snow flux [kg m^-2 s^-1]), both of which are 
-         !  accum_mean. therefore, they are accum_mean.
-         precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp <- local var -> accum_mean
-         precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp <- local var -> accum_mean
-         !KC: why duplicated as above?? wht's the difference between rflx vs precip_liq_flux?
-         !  what's the diff between sflx vs precip_ice_flux? --> both rflx and sflx are not used in this code, unlike rflx and sflx in MG, 
-         !  which are essentially the previp_liq_flux and precip_ice_flux here.
-         rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp <- local var, same Q
-         sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp <- local var, same Q
-         !KC: cflx is later output via outfld('cldliq_flux',  cflx, ..) as 'cld liquid flux' ['kgm^-2 s^-1']
-         !  Q: in MG, there is also a cflx (grid-box avg liq condensate flux (kg m^-2 s^-1)), are they the same???
-         ! to-do: what is cflx
-         cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp <- local var, same Q
-         !KC: cld_frac_* are not changed by P3, but their calculation requires variables that are updated by P3.
-         ! in MG, they use packed_liqcldf and packed_icecldf, which are not changed in substeps, for p3_main;
-         ! however, MG also have liqcldf (Liquid cloud fraction (combined into cloud)) & icecldf(Ice cloud fraction)
-         ! where they are updated after the MG loop via    
-         ! icecldf(:ncol,top_lev:pver) = ast(:ncol,top_lev:pver); liqcldf(:ncol,top_lev:pver) = ast(:ncol,top_lev:pver)
-         ! where ast (from pbuf, not changed) is the same as in P3. see calculation of icecldf and liqcldf in notes in 
-         ! subroutine get_cloud_fraction()
-         cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction 
-         cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction
-         cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction
+         !KC: mimic MG: in MG, it is cmeiout[kg/kg/s], accum_mean
+         qv2qi_depos_tend(its:ite,kts:kte),    & ! OUT Deposition/sublimation rate of cloud ice !KC: local var, tend -> accum_mean
+         !KC: mimic MG: in MG, it is prain(from pbuf['PRAIN']), accum_mean
+         precip_total_tend(its:ite,kts:kte),      & ! OUT Total precipitation (rain + snow) <- pbuf tend -> accum_mean 
+         !KC: mimic MG: in MG, it is nevapr (from pbuf['NEVAPR']),accum_mean
+         nevapr(its:ite,kts:kte),     & ! OUT evaporation of total precipitation (rain + snow) <- pbuf tend -> accum_mean
+         !KC: mimic MG: in MG, it is prer_evap (pbuf['PRER_EVAP'],precipitation evaporation rate) and is accum_null
+         qr_evap_tend(its:ite,kts:kte),  & ! OUT rain evaporation <- pbuf -> accum_null -> checked
+         !KC: mimic MG: precip_*_flux are grid-box avg rain[ice/snow] fluxes,
+         !  in MG, they are rflx and sflx, both of which are accum_mean. therefore, they should be accum_mean.
+         precip_liq_flux(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2s^-1) pverp <- local var, flux -> accum_mean
+         precip_ice_flux(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp <- local var, flux -> accum_mean
+      !KC: note:
+         !  Q: why duplicated as above?? there seems to be no difference between rflx vs precip_liq_flux.
+         ! 1. For usage in code: 
+         !     - precip_*_flux are the same as rflx and sflx in MG, aka, used to calculate flxprc and flxsnw
+         !     - Both rflx and sflx here are not used in the code, only outfld as rain[ice]_flux in the end.
+         ! 2. How about in P3 as output compared to MG output?
+         !     - As outputs of p3_main (inout of rain_sedimentation), rflx and precip_liq_flux are exactly the same.
+         !     - Similarly, precip_ice_flux and sflx are exactly the same.
+      !KC: therefore, do the same for rflx and sflx here, accum_mean.
+         rflx(its:ite,kts:kte+1),     & ! OUT grid-box average rain flux (kg m^-2 s^-1) pverp <- diagnostic -> accum_mean
+         sflx(its:ite,kts:kte+1),     & ! OUT grid-box average ice/snow flux (kgm^-2 s^-1) pverp <- diagnostic -> accum_mean
+         !KC: cflx is only outputted via outfld('cldliq_flux') defined as 'cld liquid flux' ['kgm^-2 s^-1']
+         !  In MG, there is also a cflx (grid-box avg liq condensate flux (kg m^-2 s^-1)) also not used, which is accum_mean.
+         !  Therefore, to mimic MG, also those four variables above, accum_mean.
+         cflx(its:ite,kts:kte+1),     & ! OUT grid-box average cld droplet flux (kgm^-2 s^-1) pverp <- diagnostic, not used -> accum_mean
+      !KC: note: 
+         ! - cld_frac_* are calculated by get_cloud_fraction, themselves are not changed by P3,
+         !     But the inputs for get_cloud_fraction are updated by P3. After inspection of the func, 
+         !     it should be noted that only cld_frac_r will change due to inputs changes during the substepping of P3.
+         !     cld_frac_l[i] are only related to ast, which will not change in substepping.
+         ! - There are two options:  1. make cld_frac_* remain unchanged during substepping 
+         !                          2. update cld_frac_*, run get_cloud_fraction every iteration of P3.
+         !  - cld_frac_* are also outputted via outfld('CLOUDFRAC_LIQ_MICRO','CLOUDFRAC_ICE_MICRO','CLOUDFRAC_RAIN_MICRO').
+         !KC: cld_frac_r is derived by other vars, itself is not changed by p3, but its input is changed by P3.
+         ! - in get_cloud_fraction: cld_frac_r is almot max(ast, mincld) affected by cldliq, rain, and ice (qr, qc, qi)
+         ! - Other than outfld, the only use of cld_frac_r in this code is calc of aqrain, anrain, and freqr, which are also just diag as 
+         !     outfld('AQRAIN', 'ANRAIN' and 'FREQR'), avg rain mixing ratio, avg rain number conc, fractional occurrence of rain. 
+         !     calculation of them are: aqrain = rain*cld_frac_r; anrain = numrain*cld_frac_r; freqr = cld_frac_r; where
+         !     rain, and numrain are updated during P3 substepping; 
+         ! - in MG, these are qrout2, nrout2, and freqr, where 
+         !     qrout2, nrout2, and freqr are OUT of micro_mg_tend, updated through packed_freqr, packed_q[n]rout2
+         !     - in micro_mg_tend2_0: qrout2 = qrout * precip_frac -> similar as aqrain;
+      !KC: For now, to keep it simple, we just make cld_frac_r unchanged.
+         !  to-do: further run short test to see what will happen if keep cld_frac_r updated, which may not require split calculation of 
+         !           cld_frac_r out from get_cloud_fraction(), since whether get_cloud_fraction is in the loop or not,
+         !           cld_frac_i[l] should remain unchanged.
+         !           to-do: can also test if the above statement is true. 
+         cld_frac_r(its:ite,kts:kte),      & ! IN rain cloud fraction -> unchaged for now. -> checked
+      !KC: note:
+         ! cld_frac_l[i] are used in this code in three places:
+         !  1. IN for p3_main, not changed by P3.
+         ! - For usage here, in MG: there are packed_liqcldf and packed_icecldf used as IN for MG, 
+         !     where packed_liq[ice]cldf = packer(al[i]st_mic), (in MG, alst_mic and aist_mic are all pointed to ast)
+         !     packed_liq[ice]cldf are not updated during MG substeps, therefore, to mimic MG, 
+         !     for usage as p3_main inputs here, should keep cld_frac_l[i] unchanged during the substepping of P3.
+         ! - Additionally, calculation of cld_frac_i[l] in get_cloud_fraction(): cld_frac_i[l] = max(ast, mincld);
+         !     in MG, al[i]st_mic => ast, not bounded by mincld; But this diff should be considered diff between P3 and MG.
+         !  2. calculation of icw[i]nc and icw[i]mrst (in-cloud properties)
+         ! - For usage here, they seem to play same roles as liqcldf (Liquid cloud fraction (combined into cloud)) & 
+         !     icecldf(Ice cloud fraction) in MG, where icecldf=ast; liqcldf=ast, where ast = pbuf['AST'], 
+         !     not changed in MG substepping, is the same as in P3 ast.
+         !     Therefore, for usage there, should use unchanged cld_frac_i[l].  
+         ! - Note that same as above, liq[ice]cldf are not bounded by mincld, diff between P3 and MG.
+         !  3. calculation of efc[i]out, nc[i]out, & freql[i]
+         ! - efc[i]out, nc[i]out, & freql[i] are not diagnostics not used but outfld('AREL[I]', 'AWNC[I]', &'FREQL[I]') in P3; 
+         !     in MG, outfld ('AREL[I]', 'AWNC[I]', &'FREQL[I]') are efc[i]out_grid, nc[i]out_grid, & freql[i]_grid
+         !     which are also diagnostics not used only outfld in MG. For the calculation of them in MG see notes below. 
+         !     But in summary, they have rather similar EQs using liq[ice]cldf_grid, both of which = liq[ice]cldf = ast
+         !     as above, packed_cldn = packer%pack(ast), which is only IN and not changed in MG substepping, 
+         !     and not changed in other processes.
+      !     Therefore, should use the unchaged cld_frac_l[i] for this usage.
+         !KC: Also note that even calculated every iteration of P3, cld_frac_l[i] will remain unchanged, details are in get_cloud_fraction
+         !KC: From the inspection above, we should choose opt1, so making cld_frac_l[i] remain unchanged.
+         cld_frac_l(its:ite,kts:kte),      & ! IN liquid cloud fraction -> unchanged -> checked
+         cld_frac_i(its:ite,kts:kte),      & ! IN ice cloud fraction -> unchanged -> checked
          tend_out(its:ite,kts:kte,:), & ! OUT p3 microphysics tendencies !KC: local var, not used in this code
          !KC: mu and lambdac are size related parameters,
          !mimic MG: in MG it uses snapshot of last call of MG for them, therefore accum_null
-         mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation <- pbuf, not used, but modified by limiters when outside loop.
-         lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation <- pbuf, same as above
+         mu(its:ite,kts:kte),         & ! OUT Size distribution shape parameter for radiation <- pbuf, not use in this code, has limiters outside loop -> accum_null -> checked
+         lambdac(its:ite,kts:kte),    & ! OUT Size distribution slope parameter for radiation <- pbuf -> accum_null -> checked
          !KC: *_exchange are phase change tendencies, diagnostics
-         !to-do: should accumulate them, right?
-         liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices <- diagnostic, not used
-         vap_liq_exchange(its:ite,kts:kte),& ! OUT sum of vap-liq phase change tendencies <- diagnostic, not used
-         vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies <- diagnostic, not used
+         ! - same unit as cmeliq, as qv2qi_depos_tend [kg/kg/s], didn't find variables that have similar behaviors in MG.
+         !  Therefore, accum_mean for now since they are tendencies and not ralated to sizes.
+         liq_ice_exchange(its:ite,kts:kte),& ! OUT sum of liq-ice phase change tendenices <- diagnostic, not used -> accum_mean
+         vap_liq_exchange(its:ite,kts:kte),& ! OUT sum of vap-liq phase change tendencies <- diagnostic -> accum_mean
+         vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies <- diagnostic, not used -> accum_mean
          !KC: *_prev from pbuf, record only the last call value, should remain unchanged in the loop.
-         qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1 
-         t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K
-         col_location(its:ite,:3),         & ! IN column locations <- derived var, not changed
-         ! diag_equiv_reflectivity & diag_ze_* are phase change tendency, 
-         diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz] <- diagnostic, not used
-         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz] <- diagnostic, not used
-      !End of call p3_main
+         qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1 -> accum_null -> checked
+         t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K -> accum_null -> checked
+         col_location(its:ite,:3),         & ! IN column locations <- derived var, not changed -> checked
+         !KC: diag_equiv_reflectivity & diag_ze_* are equivalent reflectivity data, diagnostics not used in the code. 
+         ! since they are not tendencies, accum_null
+         diag_equiv_reflectivity(its:ite,kts:kte), & !OUT equivalent reflectivity (rain + ice) [dBz] <- diagnostic, not used -> accum_null -> checked
+         diag_ze_rain(its:ite,kts:kte),diag_ze_ice(its:ite,kts:kte)) !OUT equivalent reflectivity for rain and ice [dBz] <- diagnostic, not used -> accum_null -> checked
+   !End of call p3_main
 
 
     !MASSAGE OUTPUT TO FIT E3SM EXPECTATIONS
@@ -1488,8 +1554,11 @@ end subroutine micro_p3_readnl
 
 
 
-      !KC: mimic MG substepping
-      !KC: sum ptend_loc to ptend and then scale ptend when out of loop.
+      !KC: mimic MG substepping:
+      ! 1. sum ptend_loc to ptend
+      ! 2. update local copy of state 
+      ! 3. when out of loop, scale ptend by 1/num_steps
+      
       !! Sum into overall ptend
       call physics_ptend_sum(ptend_loc, ptend, ncol)
 
@@ -1497,10 +1566,12 @@ end subroutine micro_p3_readnl
       ! Note that ptend_loc is also deallocated here (in physics_update_main)
       call physics_update(state_loc, ptend_loc, dtime/num_steps)
 
-      !!KC: mimic MG:
       !! Sum all outputs for averaging.
       !call post_proc%accumulate()
-      !!KC: I don't think we need this for P3.
+      !!KC: we don't have this for P3, but need to do accum_mean for some variables.
+      ! to-do: mimic how MG does it: MGFieldPostProc_accumulate()
+      !  
+
 
       !KC: to-do: deal with pbuf variables.
 
@@ -1548,8 +1619,8 @@ end subroutine micro_p3_readnl
     call t_startf('micro_p3_tend_finish')
    ! Following MG interface as a template:
 
-    !KC: Move this out of the loop as they should remain unchanged during substepping of P3,
-    !    only record t_prev & qv_prev from the last substep of P3
+     !KC: Move this out of the loop as they should remain unchanged during substepping of P3,
+     !    only record t_prev & qv_prev from the last substep of P3
      ! Update t_prev and qv_prev to be used by evap_precip
      t_prev(:ncol,:pver) = temp(:ncol,:pver)
      qv_prev(:ncol,:pver) = qv(:ncol,:pver)
@@ -1572,6 +1643,7 @@ end subroutine micro_p3_readnl
     ! Net micro_p3 condensation rate
     qme(:ncol,top_lev:pver) = cmeliq(:ncol,top_lev:pver) + qv2qi_depos_tend(:ncol,top_lev:pver)  ! qv2qi_depos_tend is output from p3 micro
     ! Add cmeliq to  vap_liq_exchange
+    !KC: vap_liq_exchange should be same unit as the variable above (kg/kg/s)
     vap_liq_exchange(:ncol,top_lev:pver) = vap_liq_exchange(:ncol,top_lev:pver) + cmeliq(:ncol,top_lev:pver) 
 
    !KC: to-do avg rain flux
@@ -1599,16 +1671,30 @@ end subroutine micro_p3_readnl
 
 !====================== Radiation Specific Outputs START ======================!
    
-   !KC: in MG, icecldf & liqcldf are used to calc icimrst, icwmrst, icinc, and icwnc via same EQs and limiters;
-   
+   !KC: in MG, icecldf & liqcldf are used to calc icimrst, icwmrst, icinc, and icwnc 
+   ! via almost same EQs and limiters:
+   ! in MG, icimrst, icwmrst have same EQs: ici[w]mrst = min (state_loc%q(ixcldice[liq])/max(mincld,cldf),0.005)
+   !        for icinc and icwnc, they are 
+   !  ici[w]nc = state_loc%q(ixnumice[liq])/max(mincld,ice[liq]cldf)*state_loc%pmid(i,k)/(287.15_r8*state_loc%t(i,k))
+   ! in P3, they are: ici[w]nc = numice[liq]/max(mincld,clf_frac_ice[liq])*rho, where 
+   !  - rho =  state%pmid(:ncol,top_lev:) / (rair*temp(:ncol,top_lev:))
+   !  - temp is temperature copy = th/exner, where th=state%t*exner, and is updated during P3 substepping.
+   !     therefore, temp the same as state_loc%t. 
+   !  - rair (dry air gas constant) is calculated via other constants (= 287.04, slightly(?) off 287.15), also same.
+   !  - state%pmid should be the same as state_loc%pmid since pmid is not changed during substepping.
+   !KC: to-do: do short test to confirm that state%pmid is the same as state_loc%pmid with num_steps > 1.
    ! 
+   ! 
+
+   !KC: in MG, rho for size distribution is also calculated:
+   !  rho = state%pmid(:ncol,top_lev:) / &
+   !     (rair*state%t(:ncol,top_lev:))
+   !  Note that state here is not updated by P3, so for size distribution calculation, need to stick to .
+   ! although rair here = 287.04, slightly(?) off.
 
    ! Calculate rho for size distribution
    ! parameter calculations and average it if needed
    
-   !KC: mimic MG: 'rho' in MG is = state_loc%pmid(i,k) / (287.15_r8*state_loc%t(i,k))
-   ! although rair here = 287.04, slightly(?) off.
-   ! temp is temperature copy = th/exner, where th is updated during P3 substepping.
    rho(:ncol,top_lev:) = &
       state%pmid(:ncol,top_lev:) / (rair*temp(:ncol,top_lev:))
    ! ------------------------------------------------------------ !
@@ -1688,6 +1774,10 @@ end subroutine micro_p3_readnl
       end do
    end do
 
+   !KC: this is the 3rd usage of cld_frac_l[i] in P3 code.
+   ! in MG, they have rather similar EQs using liq[ice]cldf_grid, both of which = liq[ice]cldf = ast
+   ! in that sense, should use the unchaged cld_frac_l[i]
+
    ! Column droplet concentration
    cdnumc(:ncol) = sum(numliq(:ncol,top_lev:pver) * &
         state%pdel(:ncol,top_lev:pver)/gravit, dim=2)
@@ -1748,12 +1838,15 @@ end subroutine micro_p3_readnl
 ! Note that it would need to include iflx and cflx to make the values at surface
 ! interface consistent with large scale precipitation rates.
 
-    !KC: this is the place that precip_*_flux are used, like in MG:
+    !KC: this is the ONLY place that precip_*_flux are used, exactly like sflx and rflx in MG:
+    ! in MG:
+    !   ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     !   mgflxprc(:ncol,1:top_lev) = 0.0_r8
     !   mgflxsnw(:ncol,1:top_lev) = 0.0_r8
     !   mgflxprc(:ncol,top_lev:pverp) = rflx(:ncol,top_lev:pverp) + sflx(:ncol,top_lev:pverp)
     !   mgflxsnw(:ncol,top_lev:pverp) = sflx(:ncol,top_lev:pverp)
-    ! mimic MG: in MG, rflx and sflx are accum_mean.
+    !   !KC note: in MG, mgflxprc <- pbuf['LS_FLXPRC'], just like flxprc <- pbuf['LS_FLXPRC'] in P3.
+    !KC: mimic MG: in MG, rflx and sflx are accum_mean.
 
     ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     flxprc(:ncol,1:top_lev) = 0.0_rtype ! Rain+Snow
@@ -1859,6 +1952,7 @@ end subroutine micro_p3_readnl
    call outfld('ice_flux',                sflx(:,:), pcols, lchnk)
    call outfld('rain_flux',               rflx(:,:), pcols, lchnk)
    call outfld('cldliq_flux',             cflx(:,:), pcols, lchnk)
+   !KC: in MG they have: call outfld('LS_FLXPRC', mgflxprc_grid), where mgflxprc_grid => mgflxprc, which is exactly like flxprc here.
    call outfld ('LS_FLXPRC',              flxprc(:,:), pcols, lchnk)
    call outfld ('LS_FLXSNW',              flxsnw(:,:), pcols, lchnk)
    call outfld ('LS_REFFRAIN',            reffrain(:,:), pcols, lchnk)

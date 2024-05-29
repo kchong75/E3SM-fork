@@ -2165,7 +2165,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_qr,              packed_qs,              &
                  packed_nr,              packed_ns,              &
                  packed_relvar,          packed_accre_enhan,     &
-		 precip_off,                                     &
+                 precip_off,                                     &
                  packed_p,               packed_pdel,            &
                  packed_cldn,    packed_liqcldf, packed_icecldf, &
                  packed_rate1ord_cw2pr_st,                       &
@@ -2210,7 +2210,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_nfice,           packed_qcrat,           &
                  errstring, &
                  packed_tnd_qsnow,packed_tnd_nsnow,packed_re_ice,&
-		 packed_prer_evap,                                     &
+                 packed_prer_evap,                               &
                  packed_frzimm,  packed_frzcnt,  packed_frzdep   )
             !end of call of micro_mg_tend2_0
             call t_stopf('micro_mg_tend2')
