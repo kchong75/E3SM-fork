@@ -1034,21 +1034,22 @@ end subroutine micro_p3_readnl
     real(rtype), dimension(pcols,pver) :: nccn_prescribed
 
 
-    !KC for use of P3 substepping:
-    !for use in P3 substepping
-    real(rtype) :: precip_liq_surf_prev(pcols)
-    real(rtype) :: precip_ice_surf_prev(pcols)
-    real(rtype) :: qv2qi_depos_tend_prev(pcols, pver)
-    real(rtype) :: precip_liq_flux_prev(pcols, pver+1)
-    real(rtype) :: precip_ice_flux_prev(pcols, pver+1)
-    real(rtype) :: rflx_prev(pcols, pver+1)
-    real(rtype) :: sflx_prev(pcols, pver+1)
-    real(rtype) :: cflx_prev(pcols, pver+1)
-    real(rtype), dimension(pcols, pver) :: liq_ice_exchange_prev
-    real(rtype), dimension(pcols, pver) :: vap_liq_exchange_prev
-    real(rtype), dimension(pcols, pver) :: vap_ice_exchange_prev
+    !KC: 
+    !For use in P3 substepping: local copies var_accum to accumulate the tend/fluxes updated in the loop
+    real(rtype) :: precip_liq_surf_accum(pcols)
+    real(rtype) :: precip_ice_surf_accum(pcols)
+    real(rtype) :: qv2qi_depos_tend_accum(pcols, pver)
+    real(rtype) :: precip_liq_flux_accum(pcols, pver+1)
+    real(rtype) :: precip_ice_flux_accum(pcols, pver+1)
+    real(rtype) :: rflx_accum(pcols, pver+1)
+    real(rtype) :: sflx_accum(pcols, pver+1)
+    real(rtype) :: cflx_accum(pcols, pver+1)
+    real(rtype), dimension(pcols, pver) :: liq_ice_exchange_accum
+    real(rtype), dimension(pcols, pver) :: vap_liq_exchange_accum
+    real(rtype), dimension(pcols, pver) :: vap_ice_exchange_accum
     !KC: to-do: for pbuf variables, need to know the size!
-    real(rtype) :: precip_total_tend_prev(*,*), nevapr_prev(*,*)
+    real(rtype), pointer :: precip_total_tend_accum(:,:)
+    real(rtype), pointer :: nevapr_accum(:,:)
 
     ! PBUF Variables
     real(rtype), pointer :: ast(:,:)      ! Relative humidity cloud fraction
@@ -1214,6 +1215,7 @@ end subroutine micro_p3_readnl
     cldo(:ncol,top_lev:pver)=ast(:ncol,top_lev:pver)
 
     !KC: probably don't need to make local copy of state_loc
+    !    to-do: improve the efficiency
     !!Initialize local state (state_loc) from input
     call physics_state_copy(state, state_loc)
 
@@ -1303,6 +1305,25 @@ end subroutine micro_p3_readnl
     mu      = 0.0_rtype !mucon
     lambdac = 0.0_rtype !(mucon + 1._rtype)/dcon
     dei     = 50.0_rtype !deicon
+    
+    !E.G.: allocate(ccn_values(pcols,pver,begchunk:endchunk))
+    !KC: Initiate accumulators var_accum for P3 loop
+    !allocate pointer values:
+    allocate(precip_total_tend_accum(its:ite,kts:kte))
+    allocate(nevapr_accum(its:ite,kts:kte))
+    
+    precip_liq_surf_accum = 0.0_rtype
+    precip_ice_surf_accum = 0.0_rtype
+    qv2qi_depos_tend_acc = 0.0_rtype
+    precip_liq_flux_accum = 0.0_rtype
+    precip_ice_flux_accum = 0.0_rtype
+    rflx_accum = 0.0_rtype
+    sflx_accum = 0.0_rtype
+    cflx_accum = 0.0_rtype
+    liq_ice_exchange_accum = 0.0_rtype
+    vap_liq_exchange_accum = 0.0_rtype
+    vap_ice_exchange_accum = 0.0_rtype
+
     ! Determine the cloud fraction and precip cover
     cld_frac_i(:,:) = 1.0_rtype
     cld_frac_l(:,:) = 1.0_rtype
@@ -1382,13 +1403,13 @@ end subroutine micro_p3_readnl
          pres(its:ite,kts:kte),       & ! IN     pressure at cell midpoints       Pa <-state_loc, not changed -> checked
          dz(its:ite,kts:kte),        & ! IN     vertical grid spacing            m <- local var(derived from state%zi), not changed -> checked
          npccn(its:ite,kts:kte),      & ! IN ccn activation number tendency kg-1 s-1 <- pbuf, not changed -> checked
-         nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration !KC: unchanged during subsycle, derived from pbuf&yr-mon -> checked
+         nccn_prescribed(its:ite,kts:kte), & ! IN ccn prescribed concentration <- unchanged during subsycle, derived from pbuf&yr-mon -> checked
          ni_activated(its:ite,kts:kte),    & ! IN activated ice nuclei concentration kg-1 <- pbuf, not changed -> checked
          frzimm_in(its:ite,kts:kte), &
          frzcnt_in(its:ite,kts:kte), & ! IN     CNT coupling <- pbuf, not changed -> checked
          frzdep_in(its:ite,kts:kte), &
          relvar(its:ite,kts:kte),     & ! IN cloud liquid relative variance <- pbuf, not changed -> checked
-         it,                          & ! IN     time step counter NOTE: starts at 1 for first time step !KC: get_nstep(), not changed -> checked
+         it,                          & ! IN     time step counter NOTE: starts at 1 for first time step <- from get_nstep(), not changed -> checked
          !KC: precip_*_surf are local vars, precipitation rates (m s-1), 
          ! Both (only) used in calc of prec_str and snow_str later out of the loop
          ! mimic MG: need to use avg rate, aka, accum_mean
@@ -1570,14 +1591,46 @@ end subroutine micro_p3_readnl
       !call post_proc%accumulate()
       !!KC: we don't have this for P3, but need to do accum_mean for some variables.
       ! to-do: mimic how MG does it: MGFieldPostProc_accumulate()
-      !  
+      !KC: accumulated tendencies here:
+      precip_liq_surf_accum(its:ite) = precip_liq_surf_accum(its:ite) + precip_liq_surf(its:ite)
+      precip_ice_surf_accum(its:ite) = precip_ice_surf_accum(its:ite) + precip_ice_surfits:ite)
+      qv2qi_depos_tend_accum(its:ite,kts:kte) = qv2qi_depos_tend_accum(its:ite,kts:kte) + qv2qi_depos_tend(its:ite,kts:kte)
+      precip_liq_flux_accum(its:ite,kts:kte+1) = precip_liq_flux_accum(its:ite,kts:kte+1) + precip_liq_flux(its:ite,kts:kte+1)
+      precip_ice_flux_accum(its:ite,kts:kte+1) = precip_ice_flux_accum(its:ite,kts:kte+1) + precip_ice_flux(its:ite,kts:kte+1)
+      rflx_accum(its:ite,kts:kte+1) = rflx_accum(its:ite,kts:kte+1) + rflx(its:ite,kts:kte+1)
+      sflx_accum(its:ite,kts:kte+1) = sflx_accum(its:ite,kts:kte+1) + sflx(its:ite,kts:kte+1)
+      cflx_accum(its:ite,kts:kte+1) = cflx_accum(its:ite,kts:kte+1) + cflx(its:ite,kts:kte+1)
+      liq_ice_exchange_accum(its:ite,kts:kte) = liq_ice_exchange_accum(its:ite,kts:kte) + liq_ice_exchange(its:ite,kts:kte)
+      vap_liq_exchange_accum(its:ite,kts:kte) = vap_liq_exchange_accum(its:ite,kts:kte) + vap_liq_exchange(its:ite,kts:kte)
+      vap_ice_exchange_accum(its:ite,kts:kte) = vap_ice_exchange_accum(its:ite,kts:kte) + vap_ice_exchange(its:ite,kts:kte)
+      precip_total_tend_accum(its:ite,kts:kte) = precip_total_tend_accum(its:ite,kts:kte) + precip_total_tend(its:ite,kts:kte)
+      nevapr_accum(its:ite,kts:kte) = nevapr_accum(its:ite,kts:kte) + nevapr(its:ite,kts:kte)
 
-
-      !KC: to-do: deal with pbuf variables.
 
     end do!KC: end of P3 loop
 
     call t_stopf('micro_p3_tend_loop')
+
+    !KC
+    !calculate mean of the accumulators and assign it to the variables:
+    precip_liq_surf(its:ite) = precip_liq_surf_accum(its:ite)*(1.0_rtype/num_steps)
+    precip_ice_surf(its:ite) = precip_ice_surf_accum(its:ite) * (1.0_rtype / num_steps)
+    qv2qi_depos_tend(its:ite,kts:kte) = qv2qi_depos_tend_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    precip_liq_flux(its:ite,kts:kte+1) = precip_liq_flux_accum(its:ite,kts:kte+1) * (1.0_rtype / num_steps)
+    precip_ice_flux(its:ite,kts:kte+1) = precip_ice_flux_accum(its:ite,kts:kte+1) * (1.0_rtype / num_steps)
+    rflx(its:ite,kts:kte+1) = rflx_accum(its:ite,kts:kte+1) * (1.0_rtype / num_steps)
+    sflx(its:ite,kts:kte+1) = sflx_accum(its:ite,kts:kte+1) * (1.0_rtype / num_steps)
+    cflx(its:ite,kts:kte+1) = cflx_accum(its:ite,kts:kte+1) * (1.0_rtype / num_steps)
+    liq_ice_exchange(its:ite,kts:kte) = liq_ice_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    vap_liq_exchange(its:ite,kts:kte) = vap_liq_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    vap_ice_exchange(its:ite,kts:kte) = vap_ice_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    precip_total_tend(its:ite,kts:kte) = precip_total_tend_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    nevapr(its:ite,kts:kte) = nevapr_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+
+
+    !deallocate the accumulators:
+    deallocate(precip_total_tend_accum)
+    deallocate(nevapr_accum)
 
     !KC: record p3_main_outputs only for the last substep
     p3_main_outputs(:,:,:) = -999._rtype
