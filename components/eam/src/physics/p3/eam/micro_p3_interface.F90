@@ -1311,10 +1311,12 @@ end subroutine micro_p3_readnl
     !allocate pointer values:
     allocate(precip_total_tend_accum(its:ite,kts:kte))
     allocate(nevapr_accum(its:ite,kts:kte))
+    precip_total_tend_accum = 0.0_rtype
+    nevapr_accum = 0.0_rtype
     
     precip_liq_surf_accum = 0.0_rtype
     precip_ice_surf_accum = 0.0_rtype
-    qv2qi_depos_tend_acc = 0.0_rtype
+    qv2qi_depos_tend_accum = 0.0_rtype
     precip_liq_flux_accum = 0.0_rtype
     precip_ice_flux_accum = 0.0_rtype
     rflx_accum = 0.0_rtype
@@ -1593,7 +1595,7 @@ end subroutine micro_p3_readnl
       ! to-do: mimic how MG does it: MGFieldPostProc_accumulate()
       !KC: accumulated tendencies here:
       precip_liq_surf_accum(its:ite) = precip_liq_surf_accum(its:ite) + precip_liq_surf(its:ite)
-      precip_ice_surf_accum(its:ite) = precip_ice_surf_accum(its:ite) + precip_ice_surfits:ite)
+      precip_ice_surf_accum(its:ite) = precip_ice_surf_accum(its:ite) + precip_ice_surf(its:ite)
       qv2qi_depos_tend_accum(its:ite,kts:kte) = qv2qi_depos_tend_accum(its:ite,kts:kte) + qv2qi_depos_tend(its:ite,kts:kte)
       precip_liq_flux_accum(its:ite,kts:kte+1) = precip_liq_flux_accum(its:ite,kts:kte+1) + precip_liq_flux(its:ite,kts:kte+1)
       precip_ice_flux_accum(its:ite,kts:kte+1) = precip_ice_flux_accum(its:ite,kts:kte+1) + precip_ice_flux(its:ite,kts:kte+1)
