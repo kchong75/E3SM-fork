@@ -1048,8 +1048,8 @@ end subroutine micro_p3_readnl
     real(rtype), dimension(pcols, pver) :: vap_liq_exchange_accum
     real(rtype), dimension(pcols, pver) :: vap_ice_exchange_accum
     !KC: to-do: for pbuf variables, need to know the size!
-    real(rtype), pointer :: precip_total_tend_accum(:,:)
-    real(rtype), pointer :: nevapr_accum(:,:)
+    real(rtype), allocatable :: precip_total_tend_accum(:,:)
+    real(rtype), allocatable :: nevapr_accum(:,:)
 
     ! PBUF Variables
     real(rtype), pointer :: ast(:,:)      ! Relative humidity cloud fraction
@@ -1626,8 +1626,8 @@ end subroutine micro_p3_readnl
     liq_ice_exchange(its:ite,kts:kte) = liq_ice_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
     vap_liq_exchange(its:ite,kts:kte) = vap_liq_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
     vap_ice_exchange(its:ite,kts:kte) = vap_ice_exchange_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
-    !precip_total_tend(its:ite,kts:kte) = precip_total_tend_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
-    !nevapr(its:ite,kts:kte) = nevapr_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    precip_total_tend(its:ite,kts:kte) = precip_total_tend_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
+    nevapr(its:ite,kts:kte) = nevapr_accum(its:ite,kts:kte) * (1.0_rtype / num_steps)
 
 
     !deallocate the accumulators:
