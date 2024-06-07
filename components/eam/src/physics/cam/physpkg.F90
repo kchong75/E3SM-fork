@@ -176,11 +176,13 @@ subroutine phys_register
     use subcol_utils,       only: is_subcol_on
     use output_aerocom_aie, only: output_aerocom_aie_register, do_aerocom_ind3
     use mo_chm_diags,       only: chm_diags_inti_ac
+    use cld_cpl_utils,      only: cld_cpl_register
 
     !---------------------------Local variables-----------------------------
     !
     integer  :: m        ! loop index
     integer  :: mm       ! constituent index 
+    integer  :: cld_cpl_opt !cld coupling options
     !-----------------------------------------------------------------------
 
     integer :: nmodes
@@ -190,6 +192,7 @@ subroutine phys_register
                       macrop_scheme_out        = macrop_scheme,   &
                       microp_scheme_out        = microp_scheme,   &
                       cld_macmic_num_steps_out = cld_macmic_num_steps, &
+                      cld_cpl_opt_out          = cld_cpl_opt,     &
                       do_clubb_sgs_out         = do_clubb_sgs,     &
 		      do_shoc_sgs_out          = do_shoc_sgs, &
                       do_aerocom_ind3_out      = do_aerocom_ind3,  &
@@ -271,6 +274,9 @@ subroutine phys_register
          call pbuf_register_subcol('PREC_SED', 'phys_register', prec_sed_idx)
          call pbuf_register_subcol('SNOW_SED', 'phys_register', snow_sed_idx)
        end if
+
+       ! Add fields(*_AFT_MACMIC) to pbuf for alternative coupling between macmic and rest of model (cld_cpl_opt)
+       call cld_cpl_register(cld_cpl_opt)
 
     ! Who should add FRACIS? 
     ! -- It does not seem that aero_intr should add it since FRACIS is used in convection
@@ -2184,7 +2190,7 @@ subroutine tphysbc (ztodt,               &
     use microp_driver,   only: microp_driver_tend
     use microp_aero,     only: microp_aero_run
     use macrop_driver,   only: macrop_driver_tend
-    use physics_types,   only: physics_state, physics_tend, physics_ptend, &
+    use physics_types,   only: physics_state, physics_tend, physics_ptend, physics_ptend_copy, &
          physics_ptend_init, physics_ptend_sum, physics_state_check, physics_ptend_scale
     use cam_diagnostics, only: diag_conv_tend_ini, diag_phys_writeout, diag_conv, diag_export, diag_state_b4_phys_write
     use cam_history,     only: outfld, fieldname_len
@@ -2219,6 +2225,7 @@ subroutine tphysbc (ztodt,               &
     use debug_info,      only: get_debug_chunk, get_debug_macmiciter
     use lnd_infodata,    only: precip_downscaling_method
     use cflx,            only: cflx_tend
+    use cld_cpl_utils,   only: set_state_and_ptend, save_state_snapshot_to_pbuf
 
     implicit none
 
@@ -2382,6 +2389,9 @@ subroutine tphysbc (ztodt,               &
                              ! after tphysac:clubb_surface and before aerosol dry removal.
                              ! For chemical gases, different versions of EAM 
                              ! might use different process ordering.
+
+    integer :: cld_cpl_opt   ! Method for coupling mac-mic subcycles with the rest of EAM
+    type(physics_ptend) :: ptend_dribble ! Local array to save tendencies to be dribbled into mac-mic subcycles
     !-----------------------------------------------------------------------
     call cnd_diag_checkpoint( diag, 'DYNEND', state, pbuf, cam_in, cam_out )
     !-----------------------------------------------------------------------
@@ -2392,6 +2402,7 @@ subroutine tphysbc (ztodt,               &
                        deep_scheme_out        = deep_scheme,       &
                        state_debug_checks_out = state_debug_checks &
                       ,cflx_cpl_opt_out       = cflx_cpl_opt       &
+                      ,cld_cpl_opt_out        = cld_cpl_opt        &
                       ,l_bc_energy_fix_out    = l_bc_energy_fix    &
                       ,l_dry_adj_out          = l_dry_adj          &
                       ,l_tracer_aero_out      = l_tracer_aero      &
@@ -2751,6 +2762,7 @@ end if
           call cflx_tend( state, cam_in, ztodt, ptend)
           call physics_update(state, ptend, ztodt, tend)
        end if
+      
 
        !========================================================================================
        ! Start co-substepping of macrophysics and microphysics
@@ -2762,10 +2774,28 @@ end if
        prec_pcw_macmic = 0._r8
        snow_pcw_macmic = 0._r8
 
+       ! Prep for coupling mac-mic subcycles with the rest of EAM using dribbling
+       call t_startf('cld_cpl__set_state_ptend')
+       ! KC: 
+       !    1. Calculate ptend_dribble to be 1/numstep * (state - last state_AFT_MACMIC)
+       !    2. Reset state to an old snapshot: *_AFT_MACMIC in pubf
+       if ( (cld_cpl_opt > 1) .and. (nstep > 1) ) call set_state_and_ptend( state, pbuf, ztodt, cpair, ptend_dribble )
+       call t_stopf ('cld_cpl__set_state_ptend')
+
        do macmic_it = 1, cld_macmic_num_steps
 
         call get_debug_macmiciter(macmic_it)
         write(char_macmic_it,'(i2.2)') macmic_it
+
+        call  t_startf('cld_cpl__dribble')
+        if ( (cld_cpl_opt > 1).and.(nstep>1) ) then
+           !KC: 
+           !   1. Copy ptend_dribble to ptend 
+           !   2. Use ptend to update the state by 1 macmic step
+           call physics_ptend_copy(ptend_dribble, ptend)
+           call physics_update(state, ptend, cld_macmic_ztodt)
+        end if
+        call t_stopf ('cld_cpl__dribble')
 
         if (l_st_mac) then
 
@@ -2842,7 +2872,7 @@ end if
              call clubb_tend_cam(state,ptend,pbuf,diag,cld_macmic_ztodt,&
                 cmfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
                 dlf, det_s, det_ice, lcldo)
-	   endif
+	        endif
    
            if (do_shoc_sgs) then
              call shoc_tend_e3sm(state,ptend,pbuf,cld_macmic_ztodt,&
@@ -2974,6 +3004,14 @@ end if
        snow_pcw(:ncol) = snow_pcw_macmic(:ncol)/cld_macmic_num_steps
        prec_str(:ncol) = prec_pcw(:ncol) + prec_sed(:ncol)
        snow_str(:ncol) = snow_pcw(:ncol) + snow_sed(:ncol)
+
+       call t_startf('cld_cpl__save_state')
+       !KC: 
+       ! 1. save state after mac-mic subcyle to *_AFT_MACMIC in pbuf
+       ! 2. deallocate ptend_dribble if not first step
+       if (cld_cpl_opt > 1) call save_state_snapshot_to_pbuf(state, pbuf)
+       if ((cld_cpl_opt > 1) .and. (nstep > 1)) call physics_ptend_dealloc(ptend_dribble)
+       call t_stopf('cld_cpl__save_state')
 
      end if !microp_scheme
 
