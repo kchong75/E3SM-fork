@@ -1670,7 +1670,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    if (nrain_idx > 0) call pbuf_get_field(pbuf, nrain_idx, nrout_grid_ptr)
    if (nsnow_idx > 0) call pbuf_get_field(pbuf, nsnow_idx, nsout_grid_ptr)
   !!---------------End pbuf calc and set in MG-------
-
+  
    ! If subcolumns is turned on, all calculated fields which are on subcolumns
    ! need to be retrieved on the grid as well for storing averaged values
 
@@ -2165,7 +2165,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_qr,              packed_qs,              &
                  packed_nr,              packed_ns,              &
                  packed_relvar,          packed_accre_enhan,     &
-		           precip_off,                                     &
+                 precip_off,                                     &
                  packed_p,               packed_pdel,            &
                  packed_cldn,    packed_liqcldf, packed_icecldf, &
                  packed_rate1ord_cw2pr_st,                       &
@@ -2210,7 +2210,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_nfice,           packed_qcrat,           &
                  errstring, &
                  packed_tnd_qsnow,packed_tnd_nsnow,packed_re_ice,&
-		           packed_prer_evap,                               &
+                 packed_prer_evap,                               &
                  packed_frzimm,  packed_frzcnt,  packed_frzdep   )
             !end of call of micro_mg_tend2_0
             call t_stopf('micro_mg_tend2')
