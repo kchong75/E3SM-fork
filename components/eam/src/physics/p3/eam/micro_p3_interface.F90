@@ -1532,6 +1532,19 @@ end subroutine micro_p3_readnl
     ptend%q(:ncol,:pver,ixcldrim)  = ( max(0._rtype,qm(:ncol,:pver)  ) - state%q(:ncol,:pver,ixcldrim)  )/dtime
     ptend%q(:ncol,:pver,ixrimvol)  = ( max(0._rtype,rimvol(:ncol,:pver) ) - state%q(:ncol,:pver,ixrimvol)  )/dtime
 
+      !KC: mimic MG substepping:
+      ! 1. sum ptend_loc to ptend
+      ! 2. update local copy of state 
+      ! 3. when out of loop, scale ptend by 1/num_steps
+
+      !! 1. Sum into overall ptend
+      !! 2. KC: Update state_loc; 
+      ! Note that ptend_loc is also deallocated here (in physics_update_main)
+      !! 3. Sum all outputs for averaging.
+      !call post_proc%accumulate()
+      !!KC: we don't have this for P3, but need to do accum_mean for some variables.
+      ! to-do: mimic how MG does it: MGFieldPostProc_accumulate()
+
     ! Update t_prev and qv_prev to be used by evap_precip
     t_prev(:ncol,:pver) = temp(:ncol,:pver)
     qv_prev(:ncol,:pver) = qv(:ncol,:pver)
@@ -1539,6 +1552,14 @@ end subroutine micro_p3_readnl
     call t_stopf('micro_p3_tend_loop')
     call t_startf('micro_p3_tend_finish')
    ! Following MG interface as a template:
+
+    !KC: mimic MG substeps: scale ptend by 1/num_steps
+    ! Divide ptend by substeps.
+
+    !KC: mimic MG: here they use summed outputs to produce averages: 
+    !call post_proc%process_and_unpack()
+    !call post_proc%finalize()
+
 
     !KC: qv2qi_depos_tend (Deposition/sublimation rate of cloud ice) is only used here;
     !KC: cmeliq (from pbuf) remains unchanged in this code.
@@ -1550,6 +1571,9 @@ end subroutine micro_p3_readnl
     ! Add cmeliq to  vap_liq_exchange
     !KC: vap_liq_exchange should be same unit as the variable above (kg/kg/s)
     vap_liq_exchange(:ncol,top_lev:pver) = vap_liq_exchange(:ncol,top_lev:pver) + cmeliq(:ncol,top_lev:pver) 
+
+   !KC: to-do avg rain flux
+   !
 
 !====================== Export variables/Conservation START ======================!
      !For precip, accumulate only total precip in prec_pcw and snow_pcw variables.
@@ -1603,7 +1627,7 @@ end subroutine micro_p3_readnl
    ! Compute in cloud ice and liquid mixing ratios                !
    ! Note that 'iclwp, iciwp' are used for radiation computation. !
    ! ------------------------------------------------------------ !
-      
+
    icinc = 0._rtype
    icwnc = 0._rtype
       
@@ -1753,7 +1777,7 @@ end subroutine micro_p3_readnl
     ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     flxprc(:ncol,1:top_lev) = 0.0_rtype ! Rain+Snow
     flxsnw(:ncol,1:top_lev) = 0.0_rtype ! Snow
- 
+
     flxprc(:ncol,top_lev:pverp) = precip_liq_flux(:ncol,top_lev:pverp) + precip_ice_flux(:ncol,top_lev:pverp) ! need output from p3
     flxsnw(:ncol,top_lev:pverp) = precip_ice_flux(:ncol,top_lev:pverp) ! need output from p3
 
