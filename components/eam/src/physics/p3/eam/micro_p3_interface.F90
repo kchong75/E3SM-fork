@@ -1573,7 +1573,7 @@ end subroutine micro_p3_readnl
     vap_liq_exchange(:ncol,top_lev:pver) = vap_liq_exchange(:ncol,top_lev:pver) + cmeliq(:ncol,top_lev:pver) 
 
    !KC: to-do avg rain flux
-   !
+   ! 
 
 !====================== Export variables/Conservation START ======================!
      !For precip, accumulate only total precip in prec_pcw and snow_pcw variables.
@@ -1777,7 +1777,7 @@ end subroutine micro_p3_readnl
     ! array must be zeroed beyond trop_cloud_top_pre otherwise undefined values will be used in cosp.
     flxprc(:ncol,1:top_lev) = 0.0_rtype ! Rain+Snow
     flxsnw(:ncol,1:top_lev) = 0.0_rtype ! Snow
-
+    
     flxprc(:ncol,top_lev:pverp) = precip_liq_flux(:ncol,top_lev:pverp) + precip_ice_flux(:ncol,top_lev:pverp) ! need output from p3
     flxsnw(:ncol,top_lev:pverp) = precip_ice_flux(:ncol,top_lev:pverp) ! need output from p3
 
