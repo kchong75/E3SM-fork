@@ -2500,8 +2500,8 @@ subroutine tphysbc (ztodt,               &
           call massborrow("PHYBC01",lchnk,ncol,state%psetcols,m,m,qmin(m),state%q(1,1,m),state%pdel)
        end do
 
-!!      call qneg3('TPHYSBCb',lchnk  ,ncol    ,pcols   ,pver    , &
-!!           1, pcnst, qmin  ,state%q, .True. )
+   !!      call qneg3('TPHYSBCb',lchnk  ,ncol    ,pcols   ,pver    , &
+   !!           1, pcnst, qmin  ,state%q, .True. )
     else
 
       !! original fixer to make sure tracers are all positive
@@ -2536,8 +2536,8 @@ subroutine tphysbc (ztodt,               &
           call massborrow("PHYBC02",lchnk,ncol,state%psetcols,m,m,qmin(m),state%q(1,1,m),state%pdel)
        end do
 
-!!       call qneg3('TPHYSBCc',lchnk  ,ncol    ,pcols   ,pver    , &
-!!            1, pcnst, qmin  ,state%q, .True. )
+   !!       call qneg3('TPHYSBCc',lchnk  ,ncol    ,pcols   ,pver    , &
+   !!            1, pcnst, qmin  ,state%q, .True. )
 
     else
 
@@ -2570,7 +2570,7 @@ subroutine tphysbc (ztodt,               &
     !===================================================
     ! Global mean total energy fixer
     !===================================================
-if (l_bc_energy_fix) then
+   if (l_bc_energy_fix) then
 
     call t_startf('energy_fixer')
 
@@ -2602,7 +2602,7 @@ if (l_bc_energy_fix) then
 
     call t_stopf('energy_fixer')
 
-end if
+   end if !l_bc_energy_fix
 
     call cnd_diag_checkpoint( diag, 'PBCINI', state, pbuf, cam_in, cam_out )
 
@@ -2611,7 +2611,7 @@ end if
     ! Dry adjustment
     ! This code block is not a good example of interfacing a parameterization
     !===================================================
-if (l_dry_adj) then
+   if (l_dry_adj) then
 
     call t_startf('dry_adjustment')
 
@@ -2632,7 +2632,7 @@ if (l_dry_adj) then
 
     call t_stopf('dry_adjustment')
 
-end if
+   end if !l_dry_adj
     call cnd_diag_checkpoint( diag, 'DRYADJ', state, pbuf, cam_in, cam_out )
 
     !
@@ -2667,7 +2667,7 @@ end if
     call pbuf_get_field(pbuf, prec_pcw_idx, prec_pcw )
     call pbuf_get_field(pbuf, snow_pcw_idx, snow_pcw )
 
-    if (use_subcol_microp) then
+    if (use_subcol_microp) then !KC: =False
       call pbuf_get_field(pbuf, prec_str_idx, prec_str_sc, col_type=col_type_subcol)
       call pbuf_get_field(pbuf, snow_str_idx, snow_str_sc, col_type=col_type_subcol)
     end if
@@ -2700,7 +2700,7 @@ end if
 
     call t_stopf('moist_convection')
 
-if (l_tracer_aero) then
+   if (l_tracer_aero) then
 
     ! Rebin the 4-bin version of sea salt into bins for coarse and accumulation
     ! modes that correspond to the available optics data.  This is only necessary
@@ -2709,7 +2709,7 @@ if (l_tracer_aero) then
     ! code.
     call sslt_rebin_adv(pbuf,  state)
     
-end if
+   end if
 
 
     !========================================================================================
@@ -2746,7 +2746,7 @@ end if
        ! Note that these subroutine calls do not touch water vapor. They also have no effects
        ! on tracers for which cam_in%cflx(:,m) is zero at this point.
 
-      !if ( do_clubb_sgs .and. (cflx_cpl_opt==2) ) then
+       !if ( do_clubb_sgs .and. (cflx_cpl_opt==2) ) then
        if ( cflx_cpl_opt==2 ) then
           call cflx_tend( state, cam_in, ztodt, ptend)
           call physics_update(state, ptend, ztodt, tend)
@@ -2769,7 +2769,7 @@ end if
 
         if (l_st_mac) then
 
-          if (micro_do_icesupersat) then 
+          if (micro_do_icesupersat) then !KC: =F
 
             !===================================================
             ! Aerosol Activation
@@ -2819,8 +2819,6 @@ end if
                   det_ice/cld_macmic_num_steps, flx_heat/cld_macmic_num_steps)
        
           else ! Calculate CLUBB macrophysics
-
-
 !!== KZ_WATCON 
 
     !! qqflx fixer to avoid negative water vapor in the surface layer
@@ -2835,20 +2833,20 @@ end if
     end if
 !!== KZ_WATCON 
 
-             ! =====================================================
-             !    CLUBB call (PBL, shallow convection, macrophysics)
-             ! =====================================================  
-           if (do_clubb_sgs) then
-             call clubb_tend_cam(state,ptend,pbuf,diag,cld_macmic_ztodt,&
-                cmfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
-                dlf, det_s, det_ice, lcldo)
-	   endif
-   
-           if (do_shoc_sgs) then
-             call shoc_tend_e3sm(state,ptend,pbuf,cld_macmic_ztodt,&
-                cmfmc, cam_in, sgh30, macmic_it, cld_macmic_num_steps, & 
-                dlf, det_s, det_ice, lcldo)
-           endif   
+               ! =====================================================
+               !    CLUBB call (PBL, shallow convection, macrophysics)
+               ! =====================================================  
+               if (do_clubb_sgs) then
+                  call clubb_tend_cam(state,ptend,pbuf,diag,cld_macmic_ztodt,&
+                     cmfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
+                     dlf, det_s, det_ice, lcldo)
+	            endif
+         
+               if (do_shoc_sgs) then !KC: =False
+                  call shoc_tend_e3sm(state,ptend,pbuf,cld_macmic_ztodt,&
+                     cmfmc, cam_in, sgh30, macmic_it, cld_macmic_num_steps, & 
+                     dlf, det_s, det_ice, lcldo)
+               endif   
 
                 !  Since we "added" the reserved liquid back in this routine, we need 
                 !    to account for it in the energy checker
@@ -2870,7 +2868,7 @@ end if
 
 
  
-          endif
+          endif !CLUBB call
 
           call t_stopf('macrop_tend')
         end if ! l_st_mac
@@ -2881,7 +2879,7 @@ end if
           !===================================================
         if (l_st_mic) then
 
-          if (is_subcol_on()) then
+          if (is_subcol_on()) then !KC: subcol is False
              ! Allocate sub-column structures. 
              call physics_state_alloc(state_sc, lchnk, psubcols*pcols)
              call physics_tend_alloc(tend_sc, psubcols*pcols)
@@ -2893,7 +2891,7 @@ end if
              call check_energy_timestep_init(state_sc, tend_sc, pbuf, col_type_subcol)
           end if
 
-          if (.not. micro_do_icesupersat) then 
+          if (.not. micro_do_icesupersat) then !KC: micro_do_icesupersat=False
 
             call t_startf('microp_aero_run')
             call microp_aero_run(state, ptend_aero, cld_macmic_ztodt, pbuf, lcldo)
@@ -2906,7 +2904,7 @@ end if
           call t_startf('microp_tend')
 
 
-          if (use_subcol_microp) then
+          if (use_subcol_microp) then !KC: use_subcol_microp=False
              call microp_driver_tend(state_sc, ptend_sc, cld_macmic_ztodt, pbuf)
 
              ! Average the sub-column ptend for use in gridded update - will not contain ptend_aero
@@ -2933,7 +2931,7 @@ end if
              call microp_driver_tend(state, ptend, cld_macmic_ztodt, pbuf)
           end if
           ! combine aero and micro tendencies for the grid
-          if (.not. micro_do_icesupersat) then
+          if (.not. micro_do_icesupersat) then !KC: micro_do_icesupersat=False
              call physics_ptend_sum(ptend_aero, ptend, ncol)
              call physics_ptend_dealloc(ptend_aero)
           endif
@@ -2950,7 +2948,7 @@ end if
           call t_stopf('microp_tend')
 
         else 
-        ! If microphysics is off, set surface cloud liquid/ice and rain/snow fluxes to zero
+         ! If microphysics is off, set surface cloud liquid/ice and rain/snow fluxes to zero
 
           prec_sed = 0._r8
           snow_sed = 0._r8
@@ -2981,7 +2979,7 @@ end if
      !----------------------------------------------------------------------
 
    if (l_tracer_aero) then
-      if ( .not. deep_scheme_does_scav_trans() ) then
+      if ( .not. deep_scheme_does_scav_trans() ) then !KC: deep_scheme_does_scav_trans=F
 
          !======================================================================
          ! Aerosol wet chemistry determines scavenging and transformations.
@@ -3014,7 +3012,7 @@ end if
 
          call t_stopf('tphysbc_aerosols')
 
-      end if
+      end if ! not deep_scheme_does_scav_trans()
    end if ! l_tracer_aero
 
     call cnd_diag_checkpoint( diag, 'AERWETRM', state, pbuf, cam_in, cam_out )
@@ -3049,7 +3047,7 @@ end if
 
     call cnd_diag_checkpoint( diag, 'PBCDIAG', state, pbuf, cam_in, cam_out )
 
-if (l_rad) then
+      if (l_rad) then
     !===================================================
     ! Radiation computations
     !===================================================
@@ -3071,11 +3069,11 @@ if (l_rad) then
 
     call t_stopf('radiation')
 
-end if ! l_rad
+   end if ! l_rad
 
     call cnd_diag_checkpoint( diag, 'RAD', state, pbuf, cam_in, cam_out )
 
-    if(do_aerocom_ind3) then
+    if(do_aerocom_ind3) then !KC:=F
        call cloud_top_aerocom(state, pbuf) 
     end if
 
