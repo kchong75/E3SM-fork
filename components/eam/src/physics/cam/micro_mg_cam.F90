@@ -2210,8 +2210,8 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
                  packed_nfice,           packed_qcrat,           &
                  errstring, &
                  packed_tnd_qsnow,packed_tnd_nsnow,packed_re_ice,&
-		           packed_prer_evap,                                     &
-                 packed_frzimm,  packed_frzcnt,  packed_frzdep   )            
+		           packed_prer_evap,                               &
+                 packed_frzimm,  packed_frzcnt,  packed_frzdep   )
             !end of call of micro_mg_tend2_0
             call t_stopf('micro_mg_tend2')
          end select
@@ -2810,7 +2810,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
 
          ! reset counters
          !if (pe_grid(i) /= 0._r8 .and. (pe_grid(i) < 1.e-8_r8 .or. pe_grid(i) > 1.e3_r8)) then
-         !   write (iulog,*) 'PE_grid:ANOMALY  pe_grid, acprecl_grid, acgcme_grid, tpr_grid, acnum_grid ', &
+         !    write (iulog,*) 'PE_grid:ANOMALY  pe_grid, acprecl_grid, acgcme_grid, tpr_grid, acnum_grid ', &
          !                   pe_grid(i),acprecl_grid(i), acgcme_grid(i), tpr_grid(i), acnum_grid(i)
          !endif
 
@@ -3021,6 +3021,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    if (use_subcol_microp) then
       call outfld('FICE_SCOL',   nfice,       psubcols*pcols, lchnk)
    end if
+
   !
 
   !! Output fields which are already on the grid
@@ -3082,7 +3083,7 @@ subroutine micro_mg_cam_tend(state, ptend, dtime, pbuf)
    call outfld('PRAIO',       praio_grid,       pcols, lchnk)
    call outfld('QIRESO',      qireso_grid,      pcols, lchnk)
   !
-  
+
   !! ptend_loc is deallocated in physics_update above
    call physics_state_dealloc(state_loc)
    call t_stopf('micro_mg_cam_tend_fini')

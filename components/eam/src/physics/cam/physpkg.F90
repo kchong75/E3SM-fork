@@ -2841,7 +2841,7 @@ subroutine tphysbc (ztodt,               &
                      cmfmc, cam_in, cam_out, sgh30, macmic_it, cld_macmic_num_steps, &
                      dlf, det_s, det_ice, lcldo)
 	            endif
-         
+
                if (do_shoc_sgs) then !KC: =False
                   call shoc_tend_e3sm(state,ptend,pbuf,cld_macmic_ztodt,&
                      cmfmc, cam_in, sgh30, macmic_it, cld_macmic_num_steps, & 
@@ -3047,7 +3047,7 @@ subroutine tphysbc (ztodt,               &
 
     call cnd_diag_checkpoint( diag, 'PBCDIAG', state, pbuf, cam_in, cam_out )
 
-      if (l_rad) then
+   if (l_rad) then
     !===================================================
     ! Radiation computations
     !===================================================
