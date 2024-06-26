@@ -1009,6 +1009,11 @@ end subroutine micro_p3_readnl
     real(rtype) :: th(pcols,pver)         !potential temperature                  K
     real(rtype) :: precip_liq_surf(pcols)         !precipitation rate, liquid             m s-1
     real(rtype) :: precip_ice_surf(pcols)         !precipitation rate, solid              m s-1
+    !KC: add tend variables representing effects of all non-microp processes on supersaturation
+    !KC: to-do: unit correct?
+    real(rtype) :: dqv_dt_other(pcols,pver)      !effects of all non-microp processes on qv kg/kg/s 
+    real(rtype) :: dtemp_dt_other(pcols,pver)    !effects of all non-microp processes on T  K/s
+    real(rtype) :: inv_dt ! 1/dtime
 
     real(rtype) :: rho_qi(pcols,pver)  !bulk density of ice                    kg m-1
     real(rtype) :: pres(pcols,pver)       !pressure at midlevel                   hPa
@@ -1305,6 +1310,24 @@ end subroutine micro_p3_readnl
     mu      = 0.0_rtype !mucon
     lambdac = 0.0_rtype !(mucon + 1._rtype)/dcon
     dei     = 50.0_rtype !deicon
+
+    !KC: calculate (dqv/dt)_other and (dqsl/dt)_other used in supersaturation tend calculations:
+    inv_dt        = 1._rtype/dtime   ! inverse microp time step
+    ! 1. dqv_dt_other = (qv - qv_prev)/dtime -> done
+    dqv_dt_other = (qv - qv_prev) * inv_dt
+    ! 2. dqsl_dt_other = dqsdt*(t-t_prev)*inv_dt = Lv*qsl/(Rv*t^2)*(t - t_prev)/dtime, where
+    !    dqsdt is calculated in p3_main_part2(get_time_space_phys_variables()) and also used in other places of p3_main 
+    !    Lv: latent heat of vaporization: 2.501e6 J/kg
+    !    qsl: saturation vapor mixing ratio ()
+    !    Q: is the forcing method applied on dtemp_dt_other or dqsl_dt_other? 
+    !       In other words, in the substepping of P3, should dqsl_dt_other, or dtemp_dt_other, remain unchanged? 
+    ! in p3_main_part2: t (T_atm) here is th_atm(k)/exner(k)
+    ! which are th_atm(i,:) and exner(i,:) in p3_main(); 
+    ! which are th(its:ite,kts:kte) and exner(its:ite,kts:kte) in this subroutine micro_p3_tend()
+    !dum    = 1._rtype/(rv*bfb_square(t_atm))
+    !dqsdt = latent_heat_vapor*qv_sat_l*dum
+    !dqsl_dt_other = dqsdt*(t - t_prev) * inv_dt
+    dtemp_dt_other = (th/exner - t_prev) * inv_dt
     
     !E.G.: allocate(ccn_values(pcols,pver,begchunk:endchunk))
     !KC: Initiate accumulators var_accum for P3 loop
@@ -1534,8 +1557,11 @@ end subroutine micro_p3_readnl
          vap_liq_exchange(its:ite,kts:kte),& ! OUT sum of vap-liq phase change tendencies <- diagnostic -> accum_mean
          vap_ice_exchange(its:ite,kts:kte),& ! OUT sum of vap-ice phase change tendencies <- diagnostic, not used -> accum_mean
          !KC: *_prev from pbuf, record only the last call value, should remain unchanged in the loop.
-         qv_prev(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1 -> accum_null -> checked
-         t_prev(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K -> accum_null -> checked
+         ! qv_prev & t_prev should both be accum_null, originally in p3_main, they are used to calculate tendencies_other
+         ! suplement them with tendencies since now t and qv will change during P3 substepping but would want to make the 
+         ! effects_other (dqv_dt_other & dtemp_dt_other) unchanged.
+         dqv_dt_other(its:ite,kts:kte),         & ! IN  qv at end of prev p3_main call   kg kg-1 -> accum_null -> checked
+         dtemp_dt_other(its:ite,kts:kte),          & ! IN  t at end of prev p3_main call    K -> accum_null -> checked
          col_location(its:ite,:3),         & ! IN column locations <- derived var, not changed -> checked
          !KC: diag_equiv_reflectivity & diag_ze_* are equivalent reflectivity data, diagnostics not used in the code. 
          ! since they are not tendencies, accum_null

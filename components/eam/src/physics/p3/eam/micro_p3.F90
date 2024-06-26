@@ -556,7 +556,7 @@ end function bfb_expm1
        p3_autocon_coeff,p3_accret_coeff,p3_qc_autocon_expon,p3_nc_autocon_expon,p3_qc_accret_expon, &
        p3_wbf_coeff,p3_embryonic_rain_size, p3_max_mean_rain_size, &
        pres, dpres, dz, nc_nuceat_tend, exner, inv_exner, inv_cld_frac_l, inv_cld_frac_i, inv_cld_frac_r, ni_activated, &
-       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, &
+       inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, dqv_dt_other, dtemp_dt_other, &
        t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr, rhofaci, acn, qv, th_atm, qc, nc, qr, nr, qi, ni, &
        qm, bm, latent_heat_vapor, latent_heat_sublim, latent_heat_fusion, qc_incld, qr_incld, qi_incld, qm_incld, nc_incld, nr_incld, &
        ni_incld, bm_incld, mu_c, nu, lamc, cdist, cdist1, cdistr, mu_r, lamr, logn0r, qv2qi_depos_tend, precip_total_tend, &
@@ -574,7 +574,7 @@ end function bfb_expm1
          p3_wbf_coeff, p3_embryonic_rain_size, p3_max_mean_rain_size
 
     real(rtype), intent(in), dimension(kts:kte) :: pres, dpres, dz, nc_nuceat_tend, exner, inv_exner, inv_cld_frac_l,      &
-         inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, qv_prev, t_prev, &
+         inv_cld_frac_i, inv_cld_frac_r, ni_activated, inv_qc_relvar, cld_frac_i, cld_frac_l, cld_frac_r, dqv_dt_other, dtemp_dt_other, &
          frzimm, frzcnt, frzdep
 
     real(rtype), intent(inout), dimension(kts:kte) :: t_atm, rho, inv_rho, qv_sat_l, qv_sat_i, qv_supersat_i, rhofacr, rhofaci, acn,   &
@@ -854,8 +854,8 @@ end function bfb_expm1
            epsr,epsc)
 
       call evaporate_rain(qr_incld(k),qc_incld(k),nr_incld(k),qi_incld(k), &
-           cld_frac_l(k),cld_frac_r(k),qv(k),qv_prev(k),qv_sat_l(k),qv_sat_i(k), &
-           ab,abi,epsr,epsi_tot,T_atm(k),t_prev(k),latent_heat_sublim(k),dqsdt,dt,&
+           cld_frac_l(k),cld_frac_r(k),qv(k),dqv_dt_other(k),qv_sat_l(k),qv_sat_i(k), &
+           ab,abi,epsr,epsi_tot,T_atm(k),dtemp_dt_other(k),latent_heat_sublim(k),dqsdt,dt,&
            qr2qv_evap_tend,nr_evap_tend)
 
       call ice_deposition_sublimation(qi_incld(k), ni_incld(k), t_atm(k), &
@@ -1259,7 +1259,7 @@ end function bfb_expm1
        p3_wbf_coeff,p3_mincdnc,p3_max_mean_rain_size,p3_embryonic_rain_size,                                                                                             &
        dpres,exner,qv2qi_depos_tend,precip_total_tend,nevapr,qr_evap_tend,precip_liq_flux,precip_ice_flux,rflx,sflx,cflx,cld_frac_r,cld_frac_l,cld_frac_i,               &
        p3_tend_out,mu_c,lamc,liq_ice_exchange,vap_liq_exchange,                                                                                                          &
-       vap_ice_exchange,qv_prev,t_prev,col_location,diag_equiv_reflectivity,diag_ze_rain,diag_ze_ice                                                                     &
+       vap_ice_exchange,dqv_dt_other,dtemp_dt_other,col_location,diag_equiv_reflectivity,diag_ze_rain,diag_ze_ice                                                                     &
 #ifdef SCREAM_CONFIG_IS_CMAKE
        ,elapsed_s &
 #endif
@@ -1351,7 +1351,8 @@ end function bfb_expm1
     ! INPUT needed for PBUF variables used by other parameterizations
 
     real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: cld_frac_i, cld_frac_l, cld_frac_r ! Ice, Liquid and Rain cloud fraction
-    real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: qv_prev, t_prev                    ! qv and t from previous p3_main call
+    !real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: qv_prev, t_prev                    ! qv and t from previous p3_main call
+    real(rtype), intent(in),    dimension(its:ite,kts:kte)      :: dqv_dt_other, dtemp_dt_other           ! non-microp tendencies
     ! AaronDonahue, the following variable (p3_tend_out) is a catch-all for passing P3-specific variables outside of p3_main
     ! so that they can be written as ouput.  NOTE TO C++ PORT: This variable is entirely optional and doesn't need to be
     ! included in the port to C++, or can be changed if desired.
@@ -1532,7 +1533,7 @@ end function bfb_expm1
             p3_wbf_coeff,p3_embryonic_rain_size, p3_max_mean_rain_size, &
             pres(i,:), dpres(i,:), dz(i,:), nc_nuceat_tend(i,:), exner(i,:), inv_exner(i,:), &
             inv_cld_frac_l(i,:), inv_cld_frac_i(i,:), inv_cld_frac_r(i,:), ni_activated(i,:), inv_qc_relvar(i,:), &
-            cld_frac_i(i,:), cld_frac_l(i,:), cld_frac_r(i,:), qv_prev(i,:), t_prev(i,:), &
+            cld_frac_i(i,:), cld_frac_l(i,:), cld_frac_r(i,:), dqv_dt_other(i,:), dtemp_dt_other(i,:), &
             t_atm(i,:), rho(i,:), inv_rho(i,:), qv_sat_l(i,:), &
             qv_sat_i(i,:), qv_supersat_i(i,:), rhofacr(i,:), rhofaci(i,:), acn(i,:), qv(i,:), th_atm(i,:), &
             qc(i,:), nc(i,:), qr(i,:), nr(i,:), qi(i,:), ni(i,:), qm(i,:), &
@@ -3657,8 +3658,8 @@ end subroutine rain_evap_instant_tend
 
 
 subroutine evaporate_rain(qr_incld,qc_incld,nr_incld,qi_incld, &
-cld_frac_l,cld_frac_r,qv,qv_prev,qv_sat_l,qv_sat_i, &
-ab,abi,epsr,epsi_tot,t,t_prev,latent_heat_sublim,dqsdt,dt, &
+cld_frac_l,cld_frac_r,qv,dqv_dt_other,qv_sat_l,qv_sat_i, &
+ab,abi,epsr,epsi_tot,t,dtemp_dt_other,latent_heat_sublim,dqsdt,dt, &
 qr2qv_evap_tend,nr_evap_tend)
 
   !Evaporation is basically (qv - sv_sat)/(tau_eff*ab) where tau_eff
@@ -3684,8 +3685,9 @@ qr2qv_evap_tend,nr_evap_tend)
    real(rtype), intent(in)  :: qv_sat_l,qv_sat_i
    real(rtype), intent(in)  :: ab,abi
    real(rtype), intent(in)  :: epsr,epsi_tot
-   real(rtype), intent(in)  :: qv,qv_prev
-   real(rtype), intent(in)  :: t,t_prev,latent_heat_sublim,dqsdt,dt
+   real(rtype), intent(in)  :: qv
+   real(rtype), intent(in)  :: t,latent_heat_sublim,dqsdt,dt
+   real(rtype), intent(in)  :: dtemp_dt_other, dqv_dt_other
    real(rtype), intent(out) :: qr2qv_evap_tend
    real(rtype), intent(out) :: nr_evap_tend
    real(rtype) :: cld_frac, eps_eff, tau_eff, tau_r, ssat_r, A_c, sup_r,inv_dt
@@ -3737,10 +3739,15 @@ qr2qv_evap_tend,nr_evap_tend)
       !Compute the constant source/sink term A_c for analytic integration. See Eq C4 in
       !Morrison+Milbrandt 2015 https://doi.org/10.1175/JAS-D-14-0065.1
       if (t < 273.15_rtype) then
-         A_c = (qv - qv_prev)*inv_dt - dqsdt*(t-t_prev)*inv_dt - (qv_sat_l - qv_sat_i)* &
+      !KC: calculate dqv_dt_other = (qv - qv_prev)*inv_dt and dqsldt_other = dqsdt*dtemp_dt_other
+      !     where dtemp_dt_other = (t-t_prev)*inv_dt outside of p3_main
+         A_c = dqv_dt_other - dqsdt*dtemp_dt_other - (qv_sat_l - qv_sat_i)* &
                (1.0_rtype + latent_heat_sublim*inv_cp*dqsdt)/abi*epsi_tot
+         !A_c = (qv - qv_prev)*inv_dt - dqsdt*(t-t_prev)*inv_dt - (qv_sat_l - qv_sat_i)* &
+         !      (1.0_rtype + latent_heat_sublim*inv_cp*dqsdt)/abi*epsi_tot
       else
-         A_c = (qv - qv_prev)*inv_dt - dqsdt*(t-t_prev)*inv_dt
+         A_c = dqv_dt_other - dqsdt*dtemp_dt_other
+         !A_c = (qv - qv_prev)*inv_dt - dqsdt*(t-t_prev)*inv_dt
       endif
 
       !Now compute evap rate
