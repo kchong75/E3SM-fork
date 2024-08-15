@@ -2018,16 +2018,16 @@ end if ! l_ac_energy_chk
 
     ! DCAPE-ULL: record current state of T and q for computing dynamical tendencies
     !            the calculation follows the same format as in diag_phys_tend_writeout
-    if (deep_scheme .eq. 'ZM' .and. (do_zmconv_dcape_ull .or. do_zmconv_dcape_only)) then
-      ifld = pbuf_get_index('T_STAR')
-      call pbuf_get_field(pbuf, ifld, t_star, (/1,1/),(/pcols,pver/))
-      ifld = pbuf_get_index('Q_STAR')
-      call pbuf_get_field(pbuf, ifld, q_star, (/1,1/),(/pcols,pver/))
-      do k=1,pver
-         q_star(:ncol,k) = state%q(:ncol,k,1)
-         t_star(:ncol,k) = state%t(:ncol,k)
-      enddo
-    endif
+!    if (deep_scheme .eq. 'ZM' .and. (do_zmconv_dcape_ull .or. do_zmconv_dcape_only)) then
+!      ifld = pbuf_get_index('T_STAR')
+!      call pbuf_get_field(pbuf, ifld, t_star, (/1,1/),(/pcols,pver/))
+!      ifld = pbuf_get_index('Q_STAR')
+!      call pbuf_get_field(pbuf, ifld, q_star, (/1,1/),(/pcols,pver/))
+!      do k=1,pver
+!         q_star(:ncol,k) = state%q(:ncol,k,1)
+!         t_star(:ncol,k) = state%t(:ncol,k)
+!      enddo
+!    endif
 
     call clybry_fam_set( ncol, lchnk, map2chm, state%q, pbuf )
 
@@ -2286,6 +2286,10 @@ subroutine tphysbc (ztodt,               &
     ! physics buffer fields to compute tendencies for stratiform package
     integer itim_old, ifld
     real(r8), pointer, dimension(:,:) :: cld        ! cloud fraction
+
+    !DCAPE-ULL: physics buffer fields to compute tendencies for dcape
+    real(r8), pointer, dimension(:,:) :: t_star   ! temperature
+    real(r8), pointer, dimension(:,:) :: q_star   ! moisture
 
     character(len=16)  :: deep_scheme      ! Default set in phys_control.F90
 
@@ -2660,6 +2664,20 @@ end if
     call t_stopf('convect_deep_tend')
 
     call physics_update(state, ptend, ztodt, tend)
+
+    ! DCAPE-ULL: record current state of T and q for computing dynamical tendencies
+    !            the calculation follows the same format as in diag_phys_tend_writeout
+    if (deep_scheme .eq. 'ZM' .and. (do_zmconv_dcape_ull .or. do_zmconv_dcape_only)) then
+      ifld = pbuf_get_index('T_STAR')
+      call pbuf_get_field(pbuf, ifld, t_star, (/1,1/),(/pcols,pver/))
+      ifld = pbuf_get_index('Q_STAR')
+      call pbuf_get_field(pbuf, ifld, q_star, (/1,1/),(/pcols,pver/))
+      do k=1,pver
+         q_star(:ncol,k) = state%q(:ncol,k,1)
+         t_star(:ncol,k) = state%t(:ncol,k)
+      enddo
+    endif
+
 
     call pbuf_get_field(pbuf, prec_dp_idx, prec_dp )
     call pbuf_get_field(pbuf, snow_dp_idx, snow_dp )

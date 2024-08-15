@@ -89,7 +89,8 @@ module zm_conv
    real(r8), parameter :: capelmt = 70._r8  ! threshold value for cape for deep convection.
 
 !DCAPE-ULL, including options for DCAPE_only and ull_only
-   real(r8), parameter :: trigdcapelmt = 0._r8  ! threshold value of dcape for deep convection
+!   real(r8), parameter :: trigdcapelmt = 0._r8  ! threshold value of dcape for deep convection
+   real(r8), parameter :: trigdcapelmt = 0.005_r8  ! threshold value of dcape for deep convection 18J/hr=0.005
    logical :: trigdcape_ull    = .false. !true to use DCAPE trigger and ULL
    logical :: trig_dcape_only  = .false. !true to use DCAPE trigger, ULL not used
    logical :: trig_ull_only    = .false. !true to use ULL along with default CAPE-based trigger
@@ -556,6 +557,9 @@ subroutine zm_convr(lchnk   ,ncol    , &
    integer lonm1(pcols)                ! w index of onset level for deep convection.
    integer maxim1(pcols)               ! w index of level with largest moist static energy.
 
+   real(r8) q_mx(pcols)
+   real(r8) t_mx(pcols)
+
    logical iclosure                    ! switch on sequence of call to buoyan_dilute to derive DCAPE
    real(r8) capelmt_wk                 ! work capelmt to allow diff values passed to closure with trigdcape
 
@@ -584,6 +588,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
    
    real(r8) rprdg(pcols,pver)          ! wg gathered rain production rate
    real(r8) capeg(pcols)               ! wg gathered convective available potential energy.
+   real(r8) dcapeg(pcols)              ! wg gathered CAPE tendency
    real(r8) tlg(pcols)                 ! wg grid slice of gathered values of tl.
    real(r8) landfracg(pcols)           ! wg grid slice of landfrac  
    real(r8) tpertg(pcols)              ! wg grid slice of gathered values of tpert (temperature perturbation from PBL)
@@ -789,6 +794,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
 
    do i = 1,ncol
       capeg(i) = 0._r8
+      dcapeg(i)= 0._r8
       lclg(i) = 1
       lelg(i) = pver
       maxg(i) = 1
@@ -823,8 +829,10 @@ subroutine zm_convr(lchnk   ,ncol    , &
                   tp      ,qstp    ,tl      ,rl      ,cape     , &! rl = in, others = out
                   pblt    ,lcl     ,lel     ,lon     ,maxi     , &! pblt = in, others = out
                   rgas    ,grav    ,cpres   ,msg               , &! in
-                  tpert   ,iclosure                            )  ! in
-         
+                  tpert   ,iclosure,use_input_parcel_tq_in = .false., &
+                  q_mx=q_mx  , &
+                  t_mx=t_mx             )  ! in
+                                    
       if (trigdcape_ull .or. trig_dcape_only) then
          dcapemx(:ncol) = maxi(:ncol)
       endif
@@ -838,8 +846,10 @@ subroutine zm_convr(lchnk   ,ncol    , &
                  tpm1    ,qstpm1  ,tlm1    ,rl      ,capem1   , &! rl = in, others = out
                  pblt    ,lclm1   ,lelm1   ,lonm1   ,maxim1   , &! pblt = in; others = out
                  rgas    ,grav    ,cpres   ,msg               , &! in
-                 tpert   ,iclosure, dcapemx                   )  ! in
-
+                 tpert   ,iclosure, dcapemx=dcapemx,            &
+                 use_input_parcel_tq_in = .true.,  q_mx=q_mx  , &
+                 t_mx=t_mx     )  ! in
+            
           dcape(:ncol) = (cape(:ncol)-capem1(:ncol))/(delt*2._r8)
       endif
    end if
@@ -945,6 +955,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
    end do
    do i = 1,lengath
       capeg(i) = cape(ideep(i))
+      dcapeg(i)= dcape(ideep(i))
       lclg(i) = lcl(ideep(i))
       lelg(i) = lel(ideep(i))
       maxg(i) = maxi(ideep(i))
@@ -1035,7 +1046,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
                 qlg     ,dsubcld ,mb      ,capeg   ,tlg     , &
                 lclg    ,lelg    ,jt      ,maxg    ,1       , &
                 lengath ,rgas    ,grav    ,cpres   ,rl      , &
-                msg     ,capelmt_wk )
+                msg     ,capelmt_wk, dcapeg )
 !
 ! limit cloud base mass flux to theoretical upper bound.
 !
@@ -3796,7 +3807,7 @@ subroutine closure(lchnk   , &
                    ql      ,dsubcld ,mb      ,cape    ,tl      , &
                    lcl     ,lel     ,jt      ,mx      ,il1g    , &
                    il2g    ,rd      ,grav    ,cp      ,rl      , &
-                   msg     ,capelmt )
+                   msg     ,capelmt ,dcape)
 !----------------------------------------------------------------------- 
 ! 
 ! Purpose: 
@@ -3846,6 +3857,7 @@ subroutine closure(lchnk   , &
    real(r8), intent(in) :: qstp(pcols,pver)     ! spec humidity of parcel
    real(r8), intent(in) :: zf(pcols,pver+1)     ! height of interface levels
    real(r8), intent(in) :: ql(pcols,pver)       ! liquid water mixing ratio
+   real(r8), intent(in) :: dcape(pcols)
 
    real(r8), intent(in) :: cape(pcols)          ! available pot. energy of column
    real(r8), intent(in) :: tl(pcols)
@@ -3895,10 +3907,12 @@ subroutine closure(lchnk   , &
    do i = il1g,il2g
       mb(i) = 0._r8
       eb = p(i,mx(i))*q(i,mx(i))/ (eps1+q(i,mx(i)))
-      dtbdt(i) = (1._r8/dsubcld(i))* (mu(i,mx(i))*(shat(i,mx(i))-su(i,mx(i)))+ &
-                  md(i,mx(i))* (shat(i,mx(i))-sd(i,mx(i))))
-      dqbdt(i) = (1._r8/dsubcld(i))* (mu(i,mx(i))*(qhat(i,mx(i))-qu(i,mx(i)))+ &
-                 md(i,mx(i))* (qhat(i,mx(i))-qd(i,mx(i))))
+!      dtbdt(i) = (1._r8/dsubcld(i))* (mu(i,mx(i))*(shat(i,mx(i))-su(i,mx(i)))+ &
+!                  md(i,mx(i))* (shat(i,mx(i))-sd(i,mx(i))))
+!      dqbdt(i) = (1._r8/dsubcld(i))* (mu(i,mx(i))*(qhat(i,mx(i))-qu(i,mx(i)))+ &
+!                 md(i,mx(i))* (qhat(i,mx(i))-qd(i,mx(i))))
+      dtbdt(i) =  0._r8
+      dqbdt(i) =  0._r8
       debdt = eps1*p(i,mx(i))/ (eps1+q(i,mx(i)))**2*dqbdt(i)
       dtldt(i) = -2840._r8* (3.5_r8/t(i,mx(i))*dtbdt(i)-debdt/eb)/ &
                  (3.5_r8*log(t(i,mx(i)))-log(eb)-4.805_r8)**2
@@ -3996,8 +4010,9 @@ subroutine closure(lchnk   , &
       end do
    end do
    do i = il1g,il2g
-      dltaa = -1._r8* (cape(i)-capelmt)
-      if (dadt(i) /= 0._r8) mb(i) = max(dltaa/tau/dadt(i),0._r8)
+      if (dadt(i) < 0._r8) mb(i) = max(-dcape(i)/dadt(i),0._r8)
+      !dltaa = -1._r8* (cape(i)-capelmt)
+      !if (dadt(i) /= 0._r8) mb(i) = max(dltaa/tau/dadt(i),0._r8)
       if (zm_microp .and. mx(i)-jt(i) < 2._r8) mb(i) =0.0_r8
    end do
 !
