@@ -784,7 +784,7 @@ subroutine phys_init( phys_state, phys_tend, pbuf2d, cam_out )
     use output_aerocom_aie, only: output_aerocom_aie_init, do_aerocom_ind3
     use misc_diagnostics,   only: dcape_diags_init
     use conditional_diag_output_utils, only: cnd_diag_output_init
-    use phys_grid_ctem,     only: phys_grid_ctem_init
+!    use phys_grid_ctem,     only: phys_grid_ctem_init
 
     ! Input/output arguments
     type(physics_state), pointer       :: phys_state(:)
@@ -1011,7 +1011,7 @@ subroutine phys_init( phys_state, phys_tend, pbuf2d, cam_out )
     if(Nudge_Model) call nudging_init
 
     ! Initialize Transformed Eularian Mean (TEM) diagnostics
-    call phys_grid_ctem_init()
+!    call phys_grid_ctem_init()
 
     
    !BSINGH -  addfld and adddefault calls for perturb growth testing    
@@ -1495,7 +1495,7 @@ subroutine phys_final( phys_state, phys_tend, pbuf2d, phys_diag )
     use chemistry, only : chem_final
     use wv_saturation, only : wv_sat_final
     use radiation, only: radiation_final
-    use phys_grid_ctem, only : phys_grid_ctem_final
+!    use phys_grid_ctem, only : phys_grid_ctem_final
     !----------------------------------------------------------------------- 
     ! 
     ! Purpose: 
@@ -1532,9 +1532,9 @@ subroutine phys_final( phys_state, phys_tend, pbuf2d, phys_diag )
     call print_cost_p
     call t_stopf ('print_cost_p')
 
-    call t_startf ('phys_grid_ctem_final')
-    call phys_grid_ctem_final()
-    call t_stopf ('phys_grid_ctem_final')
+!    call t_startf ('phys_grid_ctem_final')
+!    call phys_grid_ctem_final()
+!    call t_stopf ('phys_grid_ctem_final')
 
 end subroutine phys_final
 
@@ -3170,7 +3170,7 @@ subroutine phys_timestep_init(phys_state, cam_out, pbuf2d)
   use nudging,             only: Nudge_Model,nudging_timestep_init
 
   use seasalt_model,       only: advance_ocean_data, has_mam_mom
-  use phys_grid_ctem,      only: phys_grid_ctem_diags
+!  use phys_grid_ctem,      only: phys_grid_ctem_diags
 
   implicit none
 
@@ -3250,7 +3250,7 @@ subroutine phys_timestep_init(phys_state, cam_out, pbuf2d)
   if(Nudge_Model) call nudging_timestep_init(phys_state)
 
   ! Update Transformed Eularian Mean (TEM) diagnostics
-  call phys_grid_ctem_diags(phys_state)
+!  call phys_grid_ctem_diags(phys_state)
 
 end subroutine phys_timestep_init
 

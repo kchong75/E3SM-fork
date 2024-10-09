@@ -90,7 +90,8 @@ module zm_conv
 
 !DCAPE-ULL, including options for DCAPE_only and ull_only
 !   real(r8), parameter :: trigdcapelmt = 0._r8  ! threshold value of dcape for deep convection
-   real(r8), parameter :: trigdcapelmt = 0.005_r8  ! threshold value of dcape for deep convection 18J/hr=0.005
+!   real(r8), parameter :: trigdcapelmt = 0.005_r8  ! threshold value of dcape for deep convection 18J/hr=0.005
+   real(r8), parameter :: trigdcapelmt = 0.003_r8  ! threshold value of dcape for deep convection 12J/hr=0.003
    logical :: trigdcape_ull    = .false. !true to use DCAPE trigger and ULL
    logical :: trig_dcape_only  = .false. !true to use DCAPE trigger, ULL not used
    logical :: trig_ull_only    = .false. !true to use ULL along with default CAPE-based trigger
@@ -750,7 +751,7 @@ subroutine zm_convr(lchnk   ,ncol    , &
    do i = 1,ncol
       pblt(i) = pver
       dsubcld(i) = 0._r8
-
+      dcape(i) = 0._r8
       jctop(i) = pver
       jcbot(i) = 1
    end do
@@ -822,8 +823,8 @@ subroutine zm_convr(lchnk   ,ncol    , &
       ! 2. Second call, iclosure = .faklse. pass the launch level from 1st call to determine CAPE at previous step
       !    The differewnce of CAPE values from the two calls is DCAPE, based on the same launch level
 
+      if ( is_first_step()) then
          iclosure = .true.
-
          call buoyan_dilute(lchnk   ,ncol    ,                   &! in
                   q       ,t       ,p       ,z       ,pf       , &! in
                   tp      ,qstp    ,tl      ,rl      ,cape     , &! rl = in, others = out
@@ -832,25 +833,60 @@ subroutine zm_convr(lchnk   ,ncol    , &
                   tpert   ,iclosure,use_input_parcel_tq_in = .false., &
                   q_mx=q_mx  , &
                   t_mx=t_mx             )  ! in
-                                    
-      if (trigdcape_ull .or. trig_dcape_only) then
-         dcapemx(:ncol) = maxi(:ncol)
-      endif
+       else if (trigdcape_ull .or. trig_dcape_only) then   
 
-      !DCAPE-ULL
-      if (.not. is_first_step() .and. (trigdcape_ull .or. trig_dcape_only)) then
-         iclosure = .false.
-
+         iclosure = .true.
+        
          call buoyan_dilute(lchnk   ,ncol    ,                  &! in
                  q_star  ,t_star     ,p       ,z       ,pf    , &! in
                  tpm1    ,qstpm1  ,tlm1    ,rl      ,capem1   , &! rl = in, others = out
                  pblt    ,lclm1   ,lelm1   ,lonm1   ,maxim1   , &! pblt = in; others = out
                  rgas    ,grav    ,cpres   ,msg               , &! in
-                 tpert   ,iclosure, dcapemx=dcapemx,            &
-                 use_input_parcel_tq_in = .true.,  q_mx=q_mx  , &
+                 tpert   ,iclosure,                             &
+                 use_input_parcel_tq_in = .false.,  q_mx=q_mx  , &
                  t_mx=t_mx     )  ! in
+
+         dcapemx(:ncol) = maxim1(:ncol)   
+
+         iclosure = .false.
+         call buoyan_dilute(lchnk   ,ncol    ,                   &! in
+                  q       ,t       ,p       ,z       ,pf       , &! in
+                  tp      ,qstp    ,tl      ,rl      ,cape     , &! rl = in, others = out
+                  pblt    ,lcl     ,lel     ,lon     ,maxi     , &! pblt = in, others = out
+                  rgas    ,grav    ,cpres   ,msg               , &! in
+                  tpert   ,iclosure, dcapemx=dcapemx           , &
+                  use_input_parcel_tq_in = .true., &
+                  q_mx=q_mx  , &
+                  t_mx=t_mx             )  ! in
+                                    
+!      if (trigdcape_ull .or. trig_dcape_only) then
+!         dcapemx(:ncol) = maxi(:ncol)
+!      endif
+
+      !DCAPE-ULL
+!      if (.not. is_first_step() .and. (trigdcape_ull .or. trig_dcape_only)) then
+!         iclosure = .false.
+
+!         call buoyan_dilute(lchnk   ,ncol    ,                  &! in
+!                 q_star  ,t_star     ,p       ,z       ,pf    , &! in
+!                 tpm1    ,qstpm1  ,tlm1    ,rl      ,capem1   , &! rl = in, others = out
+!                 pblt    ,lclm1   ,lelm1   ,lonm1   ,maxim1   , &! pblt = in; others = out
+!                 rgas    ,grav    ,cpres   ,msg               , &! in
+!                 tpert   ,iclosure, dcapemx=dcapemx,            &
+!                 use_input_parcel_tq_in = .true.,  q_mx=q_mx  , &
+!                 t_mx=t_mx     )  ! in
             
           dcape(:ncol) = (cape(:ncol)-capem1(:ncol))/(delt*2._r8)
+      else
+
+        iclosure = .true.
+         call buoyan_dilute(lchnk   ,ncol    ,                   &! in
+                  q       ,t       ,p       ,z       ,pf       , &! in
+                  tp      ,qstp    ,tl      ,rl      ,cape     , &! rl = in, others = out
+                  pblt    ,lcl     ,lel     ,lon     ,maxi     , &! pblt = in, others = out
+                  rgas    ,grav    ,cpres   ,msg               , &! in
+                  tpert   ,iclosure,  &
+                  use_input_parcel_tq_in = .false.) 
       endif
    end if
 
@@ -4009,10 +4045,13 @@ subroutine closure(lchnk   , &
          endif
       end do
    end do
+!   do i = il1g,il2g
+!      dltaa = -1._r8* (cape(i)-capelmt)
+!      if (dadt(i) /= 0._r8) mb(i) = max(dltaa/tau/dadt(i),0._r8)
+!      if (zm_microp .and. mx(i)-jt(i) < 2._r8) mb(i) =0.0_r8
+!   end do
    do i = il1g,il2g
       if (dadt(i) < 0._r8) mb(i) = max(-dcape(i)/dadt(i),0._r8)
-      !dltaa = -1._r8* (cape(i)-capelmt)
-      !if (dadt(i) /= 0._r8) mb(i) = max(dltaa/tau/dadt(i),0._r8)
       if (zm_microp .and. mx(i)-jt(i) < 2._r8) mb(i) =0.0_r8
    end do
 !
