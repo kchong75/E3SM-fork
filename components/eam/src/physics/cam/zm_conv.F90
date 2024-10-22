@@ -91,7 +91,8 @@ module zm_conv
 !DCAPE-ULL, including options for DCAPE_only and ull_only
 !   real(r8), parameter :: trigdcapelmt = 0._r8  ! threshold value of dcape for deep convection
 !   real(r8), parameter :: trigdcapelmt = 0.005_r8  ! threshold value of dcape for deep convection 18J/hr=0.005
-   real(r8), parameter :: trigdcapelmt = 0.003_r8  ! threshold value of dcape for deep convection 12J/hr=0.003
+!   real(r8), parameter :: trigdcapelmt = 0.003_r8  ! threshold value of dcape for deep convection 12J/hr=0.003
+   real(r8), parameter :: trigdcapelmt = 0.0005_r8  ! threshold value of dcape for deep convection 2 J/kg/hr=0.0005
    logical :: trigdcape_ull    = .false. !true to use DCAPE trigger and ULL
    logical :: trig_dcape_only  = .false. !true to use DCAPE trigger, ULL not used
    logical :: trig_ull_only    = .false. !true to use ULL along with default CAPE-based trigger
